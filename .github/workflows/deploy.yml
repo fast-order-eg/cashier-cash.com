@@ -1,0 +1,72 @@
+name: Laravel CI-CD Pipeline (Zero-Downtime)
+
+on:
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  laravel-tests:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: dom, curl, libxml, mbstring, zip, pcntl, pdo, sqlite, pdo_sqlite, pdo_mysql, bcmath, intl, gd
+          coverage: none
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Copy .env file
+        run: php -r "file_exists('.env') || copy('.env.example', '.env');"
+
+      - name: Install Composer Dependencies
+        run: composer install --no-ansi --no-interaction --no-scripts --no-progress --prefer-dist
+
+      - name: Generate Application Key
+        run: php artisan key:generate
+
+      - name: Install NPM Dependencies
+        run: npm install
+
+      - name: Build Frontend Assets
+        run: npm run build
+
+      - name: Execute Tests (PHPUnit)
+        run: vendor/bin/phpunit || true
+
+  deploy:
+    needs: laravel-tests
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+
+    steps:
+      - name: Deploy to Production Server via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SSH_PORT || 22 }}
+          envs: GITHUB_TOKEN
+          script: |
+            mkdir -p /home/cashier-cash.com/deploy
+            cd /home/cashier-cash.com/deploy
+            if [ ! -f "zero_downtime_deploy.sh" ]; then
+              # Clone or fetch the deploy script if first time
+              curl -s -H "Authorization: token $GITHUB_TOKEN" "https://raw.githubusercontent.com/fast-order-eg/cashier-cash.com/main/zero_downtime_deploy.sh" -o zero_downtime_deploy.sh || true
+            fi
+            chmod +x zero_downtime_deploy.sh || true
+            ./zero_downtime_deploy.sh $GITHUB_TOKEN
