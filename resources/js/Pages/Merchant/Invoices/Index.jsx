@@ -8,10 +8,12 @@ import {
     ExternalLink, 
     DollarSign,
     Calendar,
-    User
+    User,
+    ChevronDown
 } from 'lucide-react';
+import { formatNumber, formatCurrency, formatDate, formatDateTime } from '@/utils/formatters';
 
-export default function Index({ invoices, total_sales, filters }) {
+export default function Index({ invoices, total_sales, filters, selectedShift }) {
     const [search, setSearch] = useState(filters.search || '');
     const [type, setType] = useState(filters.type || '');
     const [fromDate, setFromDate] = useState(filters.from_date || '');
@@ -19,11 +21,13 @@ export default function Index({ invoices, total_sales, filters }) {
 
     const handleFilter = (e) => {
         e.preventDefault();
-        router.get(route('admin.invoices.index'), {
+        router.get('/admin/invoices', {
             search,
             type,
             from_date: fromDate,
             to_date: toDate,
+            ...(filters.shift_id ? { shift_id: filters.shift_id } : {}),
+            ...(filters.cashier_id ? { cashier_id: filters.cashier_id } : {}),
         }, { preserveState: true });
     };
 
@@ -43,10 +47,51 @@ export default function Index({ invoices, total_sales, filters }) {
                     <div className="bg-slate-900 border border-slate-800 px-4 py-2.5 rounded-2xl flex items-center gap-3">
                         <span className="text-slate-400 text-xs">إجمالي المبيعات المفلترة:</span>
                         <span className="text-emerald-400 font-mono font-black text-lg">
-                            {Number(total_sales).toLocaleString('en-US')} ج.م
+                            {formatCurrency(total_sales)}
                         </span>
                     </div>
                 </div>
+
+                {/* Selected Shift Context Banner */}
+                {selectedShift && (
+                    <div className="bg-indigo-500/10 border border-indigo-500/30 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 shadow-lg">
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center font-bold">
+                                <FileText size={20} />
+                            </div>
+                            <div>
+                                <div className="flex items-center gap-2">
+                                    <span className="font-black text-white text-sm">فواتير الوردية رقم #{selectedShift.id}</span>
+                                    <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full border ${
+                                        selectedShift.status === 'open' 
+                                            ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
+                                            : 'bg-slate-800 text-slate-400 border-slate-700'
+                                    }`}>
+                                        {selectedShift.status === 'open' ? 'وردية مفتوحة' : 'وردية مغلقة'}
+                                    </span>
+                                </div>
+                                <div className="text-xs text-slate-400 mt-1 flex flex-wrap items-center gap-2">
+                                    <span>الكاشير المسؤول: <strong className="text-white">{selectedShift.cashier?.name}</strong></span>
+                                    <span>•</span>
+                                    <span>وقت الفتح: {formatDateTime(selectedShift.opened_at)}</span>
+                                    {selectedShift.closed_at && (
+                                        <>
+                                            <span>•</span>
+                                            <span>وقت الإغلاق: {formatDateTime(selectedShift.closed_at)}</span>
+                                        </>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                        <Link
+                            href="/admin/invoices"
+                            className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white text-xs font-semibold self-start sm:self-auto transition flex items-center gap-1.5"
+                        >
+                            <span>عرض كافة الفواتير (إلغاء فلتر الوردية)</span>
+                            <span>✕</span>
+                        </Link>
+                    </div>
+                )}
 
                 {/* Filter Form */}
                 <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl">
@@ -62,28 +107,32 @@ export default function Index({ invoices, total_sales, filters }) {
                             />
                         </div>
 
-                        <select
-                            value={type}
-                            onChange={(e) => setType(e.target.value)}
-                            className="bg-slate-950 border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500"
-                        >
-                            <option value="">جميع الأنواع</option>
-                            <option value="retail">كاشير قطاعي</option>
-                            <option value="wholesale">مندوب جملة</option>
-                        </select>
+                        <div className="relative">
+                            <select
+                                value={type}
+                                onChange={(e) => setType(e.target.value)}
+                                className="bg-slate-950 border border-slate-700/80 rounded-xl pl-10 pr-3 py-2 text-xs text-white appearance-none focus:outline-none focus:border-indigo-500"
+                                style={{ backgroundImage: 'none' }}
+                            >
+                                <option value="">جميع الأنواع</option>
+                                <option value="retail">كاشير قطاعي</option>
+                                <option value="wholesale">مندوب جملة</option>
+                            </select>
+                            <ChevronDown size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                        </div>
 
                         <input
                             type="date"
                             value={fromDate}
                             onChange={(e) => setFromDate(e.target.value)}
-                            className="bg-slate-950 border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-white"
+                            className="bg-slate-950 border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 cursor-pointer"
                         />
 
                         <input
                             type="date"
                             value={toDate}
                             onChange={(e) => setToDate(e.target.value)}
-                            className="bg-slate-950 border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-white"
+                            className="bg-slate-950 border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 cursor-pointer"
                         />
 
                         <button
@@ -140,14 +189,14 @@ export default function Index({ invoices, total_sales, filters }) {
                                             </span>
                                         </td>
                                         <td className="p-4 font-mono font-bold text-emerald-400 text-sm">
-                                            {Number(inv.total_amount).toFixed(2)} ج.م
+                                            {formatCurrency(inv.total_amount)}
                                         </td>
                                         <td className="p-4 text-slate-400">
-                                            {new Date(inv.created_at).toLocaleString('ar-EG')}
+                                            {formatDateTime(inv.created_at)}
                                         </td>
                                         <td className="p-4 text-center">
                                             <Link
-                                                href={route('admin.invoices.show', inv.id)}
+                                                href={`/admin/invoices/${inv.id}`}
                                                 className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition inline-block"
                                                 title="عرض الفاتورة"
                                             >

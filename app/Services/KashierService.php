@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\Models\PlatformSetting;
+
 class KashierService
 {
     protected string $merchantId;
@@ -12,10 +14,10 @@ class KashierService
 
     public function __construct()
     {
-        $this->merchantId = config('services.kashier.merchant_id', env('KASHIER_MERCHANT_ID', 'MID-DEMO-001'));
-        $this->apiKey = config('services.kashier.api_key', env('KASHIER_API_KEY', 'test_api_key'));
-        $this->secretKey = config('services.kashier.secret_key', env('KASHIER_SECRET_KEY', 'test_secret_key'));
-        $this->mode = config('services.kashier.mode', env('KASHIER_MODE', 'test'));
+        $this->merchantId = (string) PlatformSetting::get('kashier_merchant_id', config('services.kashier.merchant_id', env('KASHIER_MERCHANT_ID', 'MID-DEMO-001')));
+        $this->apiKey = (string) PlatformSetting::get('kashier_api_key', config('services.kashier.api_key', env('KASHIER_API_KEY', 'test_api_key')));
+        $this->secretKey = (string) PlatformSetting::get('kashier_secret_key', config('services.kashier.secret_key', env('KASHIER_SECRET_KEY', 'test_secret_key')));
+        $this->mode = (string) PlatformSetting::get('kashier_mode', config('services.kashier.mode', env('KASHIER_MODE', 'test')));
         $this->baseUrl = $this->mode === 'live' 
             ? 'https://checkout.kashier.io' 
             : 'https://test-checkout.kashier.io';

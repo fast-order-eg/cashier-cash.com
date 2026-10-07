@@ -163,7 +163,7 @@ class DatabaseSeeder extends Seeder
         // مخزن سيارة المندوب
         $vanWarehouse = Warehouse::create([
             'tenant_id' => $tenant->id,
-            'name' => 'سيارة توزيع رقم 1 (محمود علي)',
+            'name' => 'سيارة رقم 1',
             'type' => 'van',
             'sales_rep_id' => $salesRep->id,
             'vehicle_plate' => 'ط س أ 1234',

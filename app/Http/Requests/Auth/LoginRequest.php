@@ -28,13 +28,25 @@ class LoginRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'email' => ['required', 'string', 'email'],
+            'email' => ['required', 'string'],
             'password' => ['required', 'string'],
         ];
     }
 
     /**
+     * Get custom messages for validator errors.
+     */
+    public function messages(): array
+    {
+        return [
+            'email.required' => 'يرجى إدخال البريد الإلكتروني أو رقم الهاتف.',
+            'password.required' => 'يرجى إدخال كلمة المرور.',
+        ];
+    }
+
+    /**
      * Attempt to authenticate the request's credentials.
+     * Supports both Email and Phone number.
      *
      * @throws ValidationException
      */
@@ -42,11 +54,30 @@ class LoginRequest extends FormRequest
     {
         $this->ensureIsNotRateLimited();
 
-        if (! Auth::attempt($this->only('email', 'password'), $this->boolean('remember'))) {
+        $login = trim($this->input('email'));
+        $field = filter_var($login, FILTER_VALIDATE_EMAIL) ? 'email' : 'phone';
+
+        $credentials = [
+            $field => $login,
+            'password' => $this->input('password'),
+        ];
+
+        if (! Auth::attempt($credentials, $this->boolean('remember'))) {
             RateLimiter::hit($this->throttleKey());
 
             throw ValidationException::withMessages([
-                'email' => trans('auth.failed'),
+                'email' => 'بيانات الدخول غير صحيحة، يرجى التأكد من البريد الإلكتروني أو رقم الهاتف وكلمة المرور.',
+            ]);
+        }
+
+        // Check if user is active
+        $user = Auth::user();
+        if ($user && !$user->is_active) {
+            Auth::guard('web')->logout();
+            RateLimiter::hit($this->throttleKey());
+
+            throw ValidationException::withMessages([
+                'email' => 'هذا الحساب معطل حالياً، يرجى مراجعة إدارة المنصة.',
             ]);
         }
 
@@ -69,10 +100,7 @@ class LoginRequest extends FormRequest
         $seconds = RateLimiter::availableIn($this->throttleKey());
 
         throw ValidationException::withMessages([
-            'email' => trans('auth.throttle', [
-                'seconds' => $seconds,
-                'minutes' => ceil($seconds / 60),
-            ]),
+            'email' => "تم تجاوز عدد محاولات الدخول المسموح بها، يرجى الانتظار {$seconds} ثانية والمحاولة لاحقاً.",
         ]);
     }
 

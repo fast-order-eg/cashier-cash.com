@@ -12,9 +12,45 @@ use Inertia\Response;
 
 class SettingController extends Controller
 {
+    private function getTenant(): Tenant
+    {
+        if (app()->has(Tenant::class)) {
+            $t = app(Tenant::class);
+            if ($t instanceof Tenant) {
+                return $t;
+            }
+        }
+
+        $user = auth()->user();
+        if ($user && $user->tenant_id) {
+            $t = Tenant::find($user->tenant_id);
+            if ($t) {
+                app()->instance(Tenant::class, $t);
+                return $t;
+            }
+        }
+
+        $impersonated = session('impersonated_tenant_id');
+        if ($impersonated) {
+            $t = Tenant::find($impersonated);
+            if ($t) {
+                app()->instance(Tenant::class, $t);
+                return $t;
+            }
+        }
+
+        $t = Tenant::first();
+        if ($t) {
+            app()->instance(Tenant::class, $t);
+            return $t;
+        }
+
+        abort(404, 'المتجر غير موجود');
+    }
+
     public function index(): Response
     {
-        $tenant = app(Tenant::class);
+        $tenant = $this->getTenant();
 
         return Inertia::render('Merchant/Settings/Index', [
             'tenant' => $tenant,
@@ -23,7 +59,7 @@ class SettingController extends Controller
 
     public function update(Request $request): RedirectResponse
     {
-        $tenant = app(Tenant::class);
+        $tenant = $this->getTenant();
 
         $validated = $request->validate([
             'name' => 'required|string|max:255',
@@ -31,7 +67,7 @@ class SettingController extends Controller
             'email' => 'nullable|email|max:255',
             'address' => 'nullable|string|max:500',
             'logo' => 'nullable|image|max:2048',
-            'currency' => 'required|string|max:10',
+            'currency' => 'nullable|string|max:10',
             'tax_rate' => 'nullable|numeric|min:0|max:100',
             'tax_enabled' => 'boolean',
             'tax_number' => 'nullable|string|max:50',
@@ -41,7 +77,7 @@ class SettingController extends Controller
         ]);
 
         $settings = $tenant->settings ?? [];
-        $settings['currency'] = $validated['currency'];
+        $settings['currency'] = $validated['currency'] ?? $settings['currency'] ?? 'ج.م';
         $settings['tax_rate'] = $validated['tax_rate'] ?? 0;
         $settings['tax_enabled'] = $validated['tax_enabled'] ?? false;
         $settings['tax_number'] = $validated['tax_number'] ?? '';
@@ -51,9 +87,9 @@ class SettingController extends Controller
 
         $updateData = [
             'name' => $validated['name'],
-            'phone' => $validated['phone'],
-            'email' => $validated['email'],
-            'address' => $validated['address'],
+            'phone' => $validated['phone'] ?? null,
+            'email' => $validated['email'] ?? null,
+            'address' => $validated['address'] ?? null,
             'settings' => $settings,
         ];
 
@@ -66,6 +102,6 @@ class SettingController extends Controller
 
         $tenant->update($updateData);
 
-        return back()->with('success', 'تم حفظ إعدادات المتجر بنجاح');
+        return redirect('/admin/settings')->with('success', 'تم حفظ إعدادات المتجر بنجاح');
     }
 }

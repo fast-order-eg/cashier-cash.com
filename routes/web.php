@@ -18,21 +18,42 @@ if (str_starts_with($configHost, 'app.')) {
 }
 
 if ($host && $host !== '127.0.0.1' && !filter_var($host, FILTER_VALIDATE_IP)) {
-    $cleanHost = str_starts_with($host, 'app.') ? substr($host, 4) : $host;
-    $parts = explode('.', $cleanHost);
-    if (count($parts) >= 3) {
-        array_shift($parts);
-        $baseDomain = implode('.', $parts);
+    if (str_ends_with($host, '.localhost')) {
+        $parts = explode('.', $host);
+        if (count($parts) === 2) {
+            $baseDomain = 'localhost';
+        } elseif (count($parts) >= 3) {
+            array_shift($parts);
+            $baseDomain = implode('.', $parts);
+        } else {
+            $baseDomain = 'localhost';
+        }
     } else {
-        $baseDomain = $cleanHost;
+        $cleanHost = str_starts_with($host, 'app.') ? substr($host, 4) : $host;
+        $parts = explode('.', $cleanHost);
+        if (count($parts) >= 3) {
+            array_shift($parts);
+            $baseDomain = implode('.', $parts);
+        } else {
+            $baseDomain = $cleanHost;
+        }
     }
 } else {
     $baseDomain = $configHost;
 }
 
 // مسار Google OAuth العام (يدعم localhost والدومينات المختلفة)
-Route::get('/auth/google', [\App\Http\Controllers\Auth\GoogleAuthController::class, 'redirectToGoogle'])->name('auth.google');
-Route::get('/auth/google/callback', [\App\Http\Controllers\Auth\GoogleAuthController::class, 'handleGoogleCallback'])->name('auth.google.callback');
+Route::middleware(['web'])->group(function () {
+    Route::get('/auth/google', [\App\Http\Controllers\Auth\GoogleAuthController::class, 'redirectToGoogle'])->name('auth.google');
+    Route::get('/auth/google/callback', [\App\Http\Controllers\Auth\GoogleAuthController::class, 'handleGoogleCallback'])->name('auth.google.callback');
+});
+
+// مسار الدخول الموحد ونقل الجلسة بين النطاقات (SSO Entry)
+Route::middleware(['web'])->get('/auth/sso-entry', [\App\Http\Controllers\Auth\AuthenticatedSessionController::class, 'ssoEntry'])->name('auth.sso.entry');
+
+// مسارات انتحال الهوية (Impersonation Entry & Leave)
+Route::middleware(['web'])->get('/admin/impersonate-entry', [\App\Http\Controllers\SuperAdmin\TenantController::class, 'impersonateEntry'])->name('merchant.impersonate.entry');
+Route::middleware(['web'])->get('/admin/impersonate-leave', [\App\Http\Controllers\SuperAdmin\TenantController::class, 'impersonateLeave'])->name('merchant.impersonate.leave');
 
 /*
 |--------------------------------------------------------------------------
@@ -52,8 +73,26 @@ Route::domain($baseDomain)->group(function () {
     Route::get('/payment/callback', [RegistrationController::class, 'kashierCallback'])->name('platform.payment.callback');
     Route::post('/webhook/kashier', [RegistrationController::class, 'kashierWebhook'])->name('platform.webhook.kashier');
 
+    // باي موب Callback & Webhook
+    Route::get('/payment/paymob/callback', [\App\Http\Controllers\Merchant\SubscriptionController::class, 'paymentCallback'])->name('platform.payment.paymob.callback');
+    Route::post('/webhook/paymob', [\App\Http\Controllers\Merchant\SubscriptionController::class, 'paymobWebhook'])->name('platform.webhook.paymob');
+
     // Auth Routes للموقع الرئيسي
     require __DIR__.'/auth.php';
+
+    // إعادة توجيه آمنة لمنع خطأ 404 إذا تم طلب لوحة التحكم أو الكاشير على الدومين الرئيسي
+    Route::get('/admin/{any?}', function () {
+        if (auth()->check()) {
+            $user = auth()->user();
+            if ($user->isSuperAdmin()) {
+                return redirect()->route('superadmin.dashboard');
+            }
+            if ($user->tenant) {
+                return redirect()->away(\App\Http\Controllers\Auth\AuthenticatedSessionController::getDashboardUrl($user));
+            }
+        }
+        return redirect()->away(\App\Http\Controllers\Auth\AuthenticatedSessionController::getCentralLoginUrl());
+    })->where('any', '.*');
 });
 
 /*
@@ -70,6 +109,8 @@ Route::domain('app.' . $baseDomain)->group(function () {
         Route::get('/tenants/{tenant}', [SuperAdminTenantController::class, 'show'])->name('superadmin.tenants.show');
         Route::patch('/tenants/{tenant}/toggle-status', [SuperAdminTenantController::class, 'toggleStatus'])->name('superadmin.tenants.toggle-status');
         Route::post('/tenants/{tenant}/assign-subscription', [SuperAdminTenantController::class, 'assignSubscription'])->name('superadmin.tenants.assign-subscription');
+        Route::post('/tenants/{tenant}/update-seats', [SuperAdminTenantController::class, 'updateSeats'])->name('superadmin.tenants.update-seats');
+        Route::delete('/tenants/{tenant}', [SuperAdminTenantController::class, 'destroy'])->name('superadmin.tenants.destroy');
         Route::get('/tenants/{tenant}/impersonate', [SuperAdminTenantController::class, 'impersonate'])->name('superadmin.tenants.impersonate');
 
         // إدارة باقات الاشتراك
@@ -77,12 +118,21 @@ Route::domain('app.' . $baseDomain)->group(function () {
         Route::post('/plans', [SuperAdminPlanController::class, 'store'])->name('superadmin.plans.store');
         Route::patch('/plans/{plan}', [SuperAdminPlanController::class, 'update'])->name('superadmin.plans.update');
         Route::delete('/plans/{plan}', [SuperAdminPlanController::class, 'destroy'])->name('superadmin.plans.destroy');
+
+        // إعدادات بوابات الدفع الإلكتروني (Paymob & Kashier)
+        Route::get('/payment-settings', [\App\Http\Controllers\SuperAdmin\PaymentSettingController::class, 'index'])->name('superadmin.payment-settings.index');
+        Route::post('/payment-settings', [\App\Http\Controllers\SuperAdmin\PaymentSettingController::class, 'update'])->name('superadmin.payment-settings.update');
     });
 
     // إعادة توجيه الصفحة الرئيسية لـ app إلى لوحة السوبر أدمن أو تسجيل الدخول
     Route::get('/', function () {
         return redirect()->route('superadmin.dashboard');
     });
+
+    // إعادة توجيه مسار التسجيل إلى صفحة التسجيل الرسمية
+    Route::get('/register', function (\Illuminate\Http\Request $request) {
+        return redirect()->away(\App\Http\Controllers\Auth\AuthenticatedSessionController::getCentralRegisterUrl($request));
+    })->name('app.register');
 });
 
 /*
@@ -91,6 +141,11 @@ Route::domain('app.' . $baseDomain)->group(function () {
 |--------------------------------------------------------------------------
 */
 Route::domain('{tenant}.' . $baseDomain)->group(function () {
+    // إعادة توجيه مسار التسجيل إلى صفحة التسجيل الرسمية
+    Route::get('/register', function (\Illuminate\Http\Request $request) {
+        return redirect()->away(\App\Http\Controllers\Auth\AuthenticatedSessionController::getCentralRegisterUrl($request));
+    });
+
     // Auth routes for store subdomain
     require __DIR__.'/auth.php';
 
@@ -127,6 +182,15 @@ Route::domain('{tenant}.' . $baseDomain)->group(function () {
             
             // إدارة الموظفين (كاشير / مناديب)
             Route::resource('staff', \App\Http\Controllers\Merchant\StaffController::class)->names('admin.staff');
+
+            // باقات واشتراكات المتجر وعمليات الدفع
+            Route::get('subscriptions', [\App\Http\Controllers\Merchant\SubscriptionController::class, 'index'])->name('admin.subscriptions.index');
+            Route::post('subscriptions/renew', [\App\Http\Controllers\Merchant\SubscriptionController::class, 'renew'])->name('admin.subscriptions.renew');
+            Route::post('subscriptions/add-staff', [\App\Http\Controllers\Merchant\SubscriptionController::class, 'addStaff'])->name('admin.subscriptions.add-staff');
+            Route::post('subscriptions/change-plan', [\App\Http\Controllers\Merchant\SubscriptionController::class, 'changePlan'])->name('admin.subscriptions.change-plan');
+            Route::get('subscriptions/checkout/{order}', [\App\Http\Controllers\Merchant\SubscriptionController::class, 'checkout'])->name('admin.subscriptions.checkout');
+            Route::post('subscriptions/pay/{order}', [\App\Http\Controllers\Merchant\SubscriptionController::class, 'processPayment'])->name('admin.subscriptions.pay');
+            Route::get('subscriptions/payment/callback', [\App\Http\Controllers\Merchant\SubscriptionController::class, 'paymentCallback'])->name('admin.subscriptions.payment.callback');
 
             // إعدادات المتجر
             Route::get('settings', [\App\Http\Controllers\Merchant\SettingController::class, 'index'])->name('admin.settings.index');

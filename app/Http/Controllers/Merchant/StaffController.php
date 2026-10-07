@@ -18,7 +18,6 @@ class StaffController extends Controller
         $tenant = app(Tenant::class);
 
         $staff = User::where('tenant_id', $tenant->id)
-            ->where('id', '!=', $tenant->owner_id)
             ->latest()
             ->get();
 
@@ -28,6 +27,7 @@ class StaffController extends Controller
 
         return Inertia::render('Merchant/Staff/Index', [
             'staff' => $staff,
+            'ownerId' => $tenant->owner_id,
             'maxAllowed' => $maxAllowed,
             'currentCount' => $currentCount,
             'canAdd' => $canAdd,
@@ -46,7 +46,7 @@ class StaffController extends Controller
             'name' => 'required|string|max:255',
             'email' => 'required|email|max:255|unique:users,email',
             'phone' => 'required|string|max:20',
-            'role' => 'required|in:cashier,sales_rep,admin,accountant',
+            'role' => 'required|in:cashier,sales_rep,admin',
             'password' => 'required|string|min:6',
         ]);
 
@@ -71,7 +71,7 @@ class StaffController extends Controller
             'name' => 'required|string|max:255',
             'email' => 'required|email|max:255|unique:users,email,' . $staff->id,
             'phone' => 'required|string|max:20',
-            'role' => 'required|in:cashier,sales_rep,admin,accountant',
+            'role' => 'required|in:cashier,sales_rep,admin',
             'password' => 'nullable|string|min:6',
             'is_active' => 'boolean',
         ]);

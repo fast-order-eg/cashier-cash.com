@@ -30,7 +30,9 @@ class Invoice extends Model
         'remaining_amount',
         'payment_method', // cash, card, credit, split
         'status', // completed, refunded, cancelled
+        'is_test',
         'notes',
+        'created_at',
     ];
 
     protected $casts = [
@@ -42,6 +44,7 @@ class Invoice extends Model
         'cost_total' => 'decimal:2',
         'paid_amount' => 'decimal:2',
         'remaining_amount' => 'decimal:2',
+        'is_test' => 'boolean',
     ];
 
     public function tenant(): BelongsTo

@@ -141,16 +141,37 @@ class VanSalesController extends Controller
 
         $totalDistance = $validated['end_odometer'] - $trip->start_odometer;
 
+        $cashSales = (float) $trip->invoices()
+            ->where('status', 'completed')
+            ->where('payment_method', 'cash')
+            ->sum('paid_amount');
+
+        $totalCashCollected = (float) $validated['total_cash_collected'];
+        $difference = round($cashSales - $totalCashCollected, 2);
+        $settlementStatus = ($difference == 0) ? 'balanced' : 'unsettled';
+
         $trip->update([
             'end_odometer' => $validated['end_odometer'],
             'total_distance' => $totalDistance,
-            'total_cash_collected' => $validated['total_cash_collected'],
+            'cash_sales' => $cashSales,
+            'total_cash_collected' => $totalCashCollected,
+            'difference' => $difference,
             'status' => 'closed',
+            'settlement_status' => $settlementStatus,
             'end_time' => now(),
             'notes' => $validated['notes'] ?? $trip->notes,
         ]);
 
-        return back()->with('success', "تم إغلاق رحلة اليوم بنجاح. المسافة المقطوعة: {$totalDistance} كم");
+        if ($difference == 0) {
+            $statusMsg = "تم إغلاق رحلة اليوم بنجاح وتصفية الحساب بالكامل (متوازنة).";
+        } elseif ($difference > 0) {
+            $statusMsg = "تم إغلاق الوردية وتسجيل توريد {$totalCashCollected} ج.م. يوجد عجز/رصيد مستحق بقيمة {$difference} ج.م بانتظار اعتماد الإدارة.";
+        } else {
+            $surplus = abs($difference);
+            $statusMsg = "تم إغلاق الوردية وتسجيل توريد {$totalCashCollected} ج.م. يوجد فائض توريد بقيمة {$surplus} ج.م بانتظار اعتماد الإدارة.";
+        }
+
+        return back()->with('success', "المسافة المقطوعة: {$totalDistance} كم. {$statusMsg}");
     }
 
     /**
@@ -251,10 +272,10 @@ class VanSalesController extends Controller
                 }
             }
 
-            // تحديث إجمالي مبيعات الرحلة
+            // تحديث إجمالي مبيعات الرحلة والمبيعات النقدية
             $trip->increment('total_sales', $totalAmount);
             if ($validated['payment_method'] === 'cash') {
-                $trip->increment('total_cash_collected', $paidAmount);
+                $trip->increment('cash_sales', $paidAmount);
             }
         });
 

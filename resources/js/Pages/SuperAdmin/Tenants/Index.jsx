@@ -7,16 +7,30 @@ import {
     Store, 
     ExternalLink, 
     UserCheck, 
+    Scan,
+    Truck,
     Power, 
     CheckCircle, 
     AlertCircle,
     Calendar,
-    Users
+    Users,
+    ChevronDown,
+    Copy,
+    Check
 } from 'lucide-react';
+import { formatNumber, formatCurrency, formatDate, formatDateTime } from '@/utils/formatters';
 
 export default function Index({ tenants, filters }) {
     const [search, setSearch] = useState(filters.search || '');
     const [status, setStatus] = useState(filters.status || '');
+    const [copiedKey, setCopiedKey] = useState(null);
+
+    const handleCopy = (text, key) => {
+        if (!text) return;
+        navigator.clipboard.writeText(text);
+        setCopiedKey(key);
+        setTimeout(() => setCopiedKey(null), 2000);
+    };
 
     const handleSearch = (e) => {
         e.preventDefault();
@@ -25,7 +39,7 @@ export default function Index({ tenants, filters }) {
 
     const handleToggleStatus = (tenantId) => {
         if (confirm('هل أنت متأكد من تغيير حالة هذا المتجر؟')) {
-            router.patch(route('superadmin.tenants.toggle-status', tenantId));
+            router.patch(`/admin/tenants/${tenantId}/toggle-status`);
         }
     };
 
@@ -56,16 +70,20 @@ export default function Index({ tenants, filters }) {
                             />
                         </div>
 
-                        <select
-                            value={status}
-                            onChange={(e) => setStatus(e.target.value)}
-                            className="bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
-                        >
-                            <option value="">جميع الحالات</option>
-                            <option value="active">نشط</option>
-                            <option value="trial">فترة تجريبية</option>
-                            <option value="expired">منتهي الاشتراك</option>
-                        </select>
+                        <div className="relative">
+                            <select
+                                value={status}
+                                onChange={(e) => setStatus(e.target.value)}
+                                className="bg-slate-900 border border-slate-700 rounded-xl pl-10 pr-4 py-2 text-sm text-white appearance-none focus:outline-none focus:border-indigo-500"
+                                style={{ backgroundImage: 'none' }}
+                            >
+                                <option value="">جميع الحالات</option>
+                                <option value="active">نشط</option>
+                                <option value="trial">فترة تجريبية</option>
+                                <option value="expired">منتهي الاشتراك</option>
+                            </select>
+                            <ChevronDown size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                        </div>
 
                         <button
                             type="submit"
@@ -101,7 +119,34 @@ export default function Index({ tenants, filters }) {
                                         </td>
                                         <td className="p-4">
                                             <div className="text-slate-200 font-medium">{t.owner?.name || 'غير مسجل'}</div>
-                                            <div className="text-xs text-slate-400 mt-0.5">{t.owner?.email} • {t.phone}</div>
+                                            <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400 mt-1.5">
+                                                {t.phone && (
+                                                    <div className="inline-flex items-center gap-1 bg-slate-900/80 px-2 py-0.5 rounded-lg border border-slate-700/70">
+                                                        <span dir="ltr">{t.phone}</span>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleCopy(t.phone, `phone-${t.id}`)}
+                                                            className="text-slate-400 hover:text-white transition p-0.5"
+                                                            title="نسخ رقم الهاتف"
+                                                        >
+                                                            {copiedKey === `phone-${t.id}` ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
+                                                        </button>
+                                                    </div>
+                                                )}
+                                                {t.owner?.email && (
+                                                    <div className="inline-flex items-center gap-1 bg-slate-900/80 px-2 py-0.5 rounded-lg border border-slate-700/70">
+                                                        <span>{t.owner.email}</span>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleCopy(t.owner.email, `email-${t.id}`)}
+                                                            className="text-slate-400 hover:text-white transition p-0.5"
+                                                            title="نسخ البريد الإلكتروني"
+                                                        >
+                                                            {copiedKey === `email-${t.id}` ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </div>
                                         </td>
                                         <td className="p-4">
                                             <span className="px-3 py-1 rounded-lg bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 text-xs font-semibold">
@@ -126,47 +171,49 @@ export default function Index({ tenants, filters }) {
                                                 </span>
                                             )}
                                         </td>
-                                        <td className="p-4 text-slate-300 text-xs">
+                                        <td className="p-4">
                                             {t.subscription_ends_at ? (
-                                                <div className="flex items-center gap-1.5">
-                                                    <Calendar size={14} className="text-slate-400" />
-                                                    <span>{new Date(t.subscription_ends_at).toLocaleDateString('ar-EG')}</span>
+                                                <div className="space-y-1">
+                                                    <div className="flex items-center gap-1.5 text-white font-mono text-xs">
+                                                        <Calendar size={13} className="text-indigo-400" />
+                                                        <span>{formatDate(t.subscription_ends_at)}</span>
+                                                    </div>
+                                                    {(() => {
+                                                        const diff = Math.ceil((new Date(t.subscription_ends_at) - new Date()) / (1000 * 60 * 60 * 24));
+                                                        if (diff < 0) {
+                                                            return (
+                                                                <span className="inline-block text-[11px] font-bold text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded-md border border-rose-500/20">
+                                                                    منتهي منذ {Math.abs(diff)} يوم
+                                                                </span>
+                                                            );
+                                                        }
+                                                        if (diff <= 7) {
+                                                            return (
+                                                                <span className="inline-block text-[11px] font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-md border border-amber-500/20">
+                                                                    متبقي {diff} أيام
+                                                                </span>
+                                                            );
+                                                        }
+                                                        return (
+                                                            <span className="inline-block text-[11px] font-medium text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20">
+                                                                متبقي {diff} يوم
+                                                            </span>
+                                                        );
+                                                    })()}
                                                 </div>
                                             ) : (
-                                                <span className="text-slate-400">غير محدد</span>
+                                                <span className="text-slate-500 text-xs">غير محدد</span>
                                             )}
                                         </td>
                                         <td className="p-4 text-center">
-                                            <div className="flex items-center justify-center gap-2">
-                                                <Link
-                                                    href={route('superadmin.tenants.show', t.id)}
-                                                    className="px-3 py-1.5 rounded-xl bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-semibold transition flex items-center gap-1"
-                                                >
-                                                    <ExternalLink size={14} />
-                                                    <span>تفاصيل</span>
-                                                </Link>
-
-                                                <Link
-                                                    href={route('superadmin.tenants.impersonate', t.id)}
-                                                    className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition flex items-center gap-1 shadow-sm"
-                                                    title="دخول لحساب المتجر كمدير"
-                                                >
-                                                    <UserCheck size={14} />
-                                                    <span>دخول</span>
-                                                </Link>
-
-                                                <button
-                                                    onClick={() => handleToggleStatus(t.id)}
-                                                    className={`p-1.5 rounded-xl transition ${
-                                                        t.is_active 
-                                                            ? 'bg-rose-500/10 text-rose-400 hover:bg-rose-500 hover:text-white' 
-                                                            : 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500 hover:text-white'
-                                                    }`}
-                                                    title={t.is_active ? 'تعطيل الحساب' : 'تفعيل الحساب'}
-                                                >
-                                                    <Power size={15} />
-                                                </button>
-                                            </div>
+                                            <Link
+                                                href={`/admin/tenants/${t.id}`}
+                                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600/15 hover:bg-indigo-600 text-indigo-400 hover:text-white border border-indigo-500/20 text-xs font-bold transition shadow-sm"
+                                                title="عرض تفاصيل المتجر والاشتراك"
+                                            >
+                                                <ExternalLink size={13} />
+                                                <span>تفاصيل</span>
+                                            </Link>
                                         </td>
                                     </tr>
                                 ))}

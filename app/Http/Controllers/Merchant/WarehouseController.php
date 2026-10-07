@@ -18,9 +18,45 @@ use Inertia\Response;
 
 class WarehouseController extends Controller
 {
+    private function getTenant(): Tenant
+    {
+        if (app()->has(Tenant::class)) {
+            $t = app(Tenant::class);
+            if ($t instanceof Tenant) {
+                return $t;
+            }
+        }
+
+        $user = auth()->user();
+        if ($user && $user->tenant_id) {
+            $t = Tenant::find($user->tenant_id);
+            if ($t) {
+                app()->instance(Tenant::class, $t);
+                return $t;
+            }
+        }
+
+        $impersonated = session('impersonated_tenant_id');
+        if ($impersonated) {
+            $t = Tenant::find($impersonated);
+            if ($t) {
+                app()->instance(Tenant::class, $t);
+                return $t;
+            }
+        }
+
+        $t = Tenant::first();
+        if ($t) {
+            app()->instance(Tenant::class, $t);
+            return $t;
+        }
+
+        abort(404, 'المتجر غير موجود');
+    }
+
     public function index(): Response
     {
-        $tenant = app(Tenant::class);
+        $tenant = $this->getTenant();
 
         $warehouses = Warehouse::where('tenant_id', $tenant->id)
             ->with(['salesRep', 'productStocks.product'])
@@ -51,7 +87,7 @@ class WarehouseController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
-        $tenant = app(Tenant::class);
+        $tenant = $this->getTenant();
 
         $validated = $request->validate([
             'name' => 'required|string|max:255',
@@ -62,7 +98,7 @@ class WarehouseController extends Controller
 
         $tenant->warehouses()->create($validated);
 
-        return back()->with('success', 'تم إنشاء المخزن / سيارة المندوب بنجاح');
+        return redirect('/admin/warehouses')->with('success', 'تم إنشاء المخزن / سيارة المندوب بنجاح');
     }
 
     /**
@@ -70,7 +106,7 @@ class WarehouseController extends Controller
      */
     public function dispatchStock(Request $request): RedirectResponse
     {
-        $tenant = app(Tenant::class);
+        $tenant = $this->getTenant();
 
         $validated = $request->validate([
             'from_warehouse_id' => 'required|exists:warehouses,id',
@@ -123,6 +159,6 @@ class WarehouseController extends Controller
             }
         });
 
-        return back()->with('success', 'تم تسجيل إذن صرف البضاعة وتحميلها لسيارة المندوب بنجاح');
+        return redirect('/admin/warehouses')->with('success', 'تم تسجيل إذن صرف البضاعة وتحميلها لسيارة المندوب بنجاح');
     }
 }

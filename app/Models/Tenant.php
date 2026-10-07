@@ -120,7 +120,7 @@ class Tenant extends Model
 
     public function currentSubscription(): HasOne
     {
-        return $this->hasOne(Subscription::class)->where('status', 'active')->latestOfMany();
+        return $this->hasOne(Subscription::class)->latestOfMany();
     }
 
     public function invoices(): HasMany
@@ -153,9 +153,13 @@ class Tenant extends Model
 
     public function maxAllowedEmployees(): int
     {
+        if ($this->subscription_status === 'trial' || $this->isSubscriptionExpired()) {
+            return 2; // التجربة المجانية بحد أقصى 2 موظف فقط
+        }
+
         $sub = $this->currentSubscription;
         if (!$sub || !$sub->plan) {
-            return 3; // default trial limit
+            return 2; // الحد الافتراضي في حال عدم وجود باقة
         }
 
         return (int) ($sub->plan->max_employees + $sub->extra_employees_count);
@@ -163,7 +167,19 @@ class Tenant extends Model
 
     public function canAddEmployee(): bool
     {
-        $currentCount = $this->users()->where('role', '!=', 'admin')->count();
+        $currentCount = $this->users()->count();
         return $currentCount < $this->maxAllowedEmployees();
+    }
+
+    public function getSubdomainAttribute(): string
+    {
+        return $this->slug;
+    }
+
+    public function resolveRouteBinding($value, $field = null)
+    {
+        return $this->where($field ?? 'id', $value)
+            ->orWhere('slug', $value)
+            ->first() ?? abort(404, 'المتجر غير موجود');
     }
 }

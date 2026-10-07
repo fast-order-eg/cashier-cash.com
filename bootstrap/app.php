@@ -12,16 +12,25 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->trustProxies(at: '*');
+        $middleware->redirectGuestsTo(fn (Request $request) => \App\Http\Controllers\Auth\AuthenticatedSessionController::getCentralLoginUrl($request));
+
+        $middleware->validateCsrfTokens(except: [
+            'webhook/*',
+            '*/webhook/*',
+        ]);
+
         $middleware->web(append: [
+            \App\Http\Middleware\HandleImpersonation::class,
             \App\Http\Middleware\HandleInertiaRequests::class,
             \Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets::class,
-            \App\Http\Middleware\IdentifyTenant::class,
         ]);
 
         $middleware->alias([
             'super_admin' => \App\Http\Middleware\SuperAdminMiddleware::class,
             'tenant' => \App\Http\Middleware\IdentifyTenant::class,
             'tenant.active' => \App\Http\Middleware\CheckTenantActive::class,
+            'impersonate' => \App\Http\Middleware\HandleImpersonation::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

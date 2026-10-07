@@ -30,11 +30,11 @@ export default function Index({ categories }) {
     const handleSubmit = (e) => {
         e.preventDefault();
         if (editingCategory) {
-            patch(route('admin.categories.update', editingCategory.id), {
+            patch(`/admin/categories/${editingCategory.id}`, {
                 onSuccess: () => setModalOpen(false),
             });
         } else {
-            post(route('admin.categories.store'), {
+            post('/admin/categories', {
                 onSuccess: () => setModalOpen(false),
             });
         }
@@ -42,7 +42,7 @@ export default function Index({ categories }) {
 
     const handleDelete = (id) => {
         if (confirm('هل أنت متأكد من حذف هذا القسم؟')) {
-            router.delete(route('admin.categories.destroy', id));
+            router.delete(`/admin/categories/${id}`);
         }
     };
 

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Head, router } from '@inertiajs/react';
+import { Head, router, Link } from '@inertiajs/react';
 import MerchantLayout from '@/Layouts/MerchantLayout';
 import {
     BarChart3,
@@ -17,6 +17,7 @@ import {
     Gauge,
     PieChart
 } from 'lucide-react';
+import { formatNumber, formatCurrency, formatDate, formatDateTime } from '@/utils/formatters';
 
 export default function Index({ summary, top_products, filters }) {
     const [fromDate, setFromDate] = useState(filters.from_date || '');
@@ -24,7 +25,7 @@ export default function Index({ summary, top_products, filters }) {
 
     const handleFilter = (e) => {
         e.preventDefault();
-        router.get(route('admin.reports.index'), {
+        router.get('/admin/reports', {
             from_date: fromDate,
             to_date: toDate,
         }, {
@@ -49,7 +50,7 @@ export default function Index({ summary, top_products, filters }) {
         setFromDate(from);
         setToDate(today);
 
-        router.get(route('admin.reports.index'), {
+        router.get('/admin/reports', {
             from_date: from,
             to_date: today,
         }, {
@@ -76,14 +77,14 @@ export default function Index({ summary, top_products, filters }) {
 
                     <div className="flex flex-wrap items-center gap-2">
                         <a
-                            href={route('admin.reports.export-excel', { from_date: fromDate, to_date: toDate })}
+                            href={`/admin/reports/export-excel?from_date=${encodeURIComponent(fromDate)}&to_date=${encodeURIComponent(toDate)}`}
                             className="px-4 py-2.5 rounded-xl bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600/30 border border-emerald-500/30 text-xs font-bold transition flex items-center gap-2"
                         >
                             <Download className="w-4 h-4" />
                             تصدير Excel
                         </a>
                         <a
-                            href={route('admin.reports.export-pdf', { from_date: fromDate, to_date: toDate })}
+                            href={`/admin/reports/export-pdf?from_date=${encodeURIComponent(fromDate)}&to_date=${encodeURIComponent(toDate)}`}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-bold transition flex items-center gap-2"
@@ -158,7 +159,7 @@ export default function Index({ summary, top_products, filters }) {
                             <DollarSign className="w-4 h-4 text-indigo-400" />
                         </div>
                         <div className="text-2xl font-black text-white font-mono">
-                            {Number(summary.total_sales).toLocaleString('ar-EG', { minimumFractionDigits: 2 })}
+                            {formatNumber(summary.total_sales)}
                             <span className="text-xs font-normal text-slate-400 mr-1">ج.م</span>
                         </div>
                         <div className="text-[11px] text-indigo-400 mt-2 flex items-center gap-1">
@@ -173,7 +174,7 @@ export default function Index({ summary, top_products, filters }) {
                             <TrendingDown className="w-4 h-4 text-amber-400" />
                         </div>
                         <div className="text-2xl font-black text-amber-400 font-mono">
-                            {Number(summary.total_cost).toLocaleString('ar-EG', { minimumFractionDigits: 2 })}
+                            {formatNumber(summary.total_cost)}
                             <span className="text-xs font-normal text-slate-400 mr-1">ج.م</span>
                         </div>
                         <div className="text-[11px] text-slate-400 mt-2">
@@ -188,7 +189,7 @@ export default function Index({ summary, top_products, filters }) {
                             <TrendingUp className="w-4 h-4 text-cyan-400" />
                         </div>
                         <div className="text-2xl font-black text-cyan-400 font-mono">
-                            {Number(summary.gross_profit).toLocaleString('ar-EG', { minimumFractionDigits: 2 })}
+                            {formatNumber(summary.gross_profit)}
                             <span className="text-xs font-normal text-slate-400 mr-1">ج.م</span>
                         </div>
                         <div className="text-[11px] text-slate-400 mt-2">
@@ -203,7 +204,7 @@ export default function Index({ summary, top_products, filters }) {
                             <TrendingDown className="w-4 h-4 text-rose-400" />
                         </div>
                         <div className="text-2xl font-black text-rose-400 font-mono">
-                            {Number(summary.total_expenses).toLocaleString('ar-EG', { minimumFractionDigits: 2 })}
+                            {formatNumber(summary.total_expenses)}
                             <span className="text-xs font-normal text-slate-400 mr-1">ج.م</span>
                         </div>
                         <div className="text-[11px] text-slate-400 mt-2">
@@ -218,7 +219,7 @@ export default function Index({ summary, top_products, filters }) {
                             <TrendingUp className="w-4 h-4 text-emerald-400" />
                         </div>
                         <div className={`text-2xl font-black font-mono ${summary.net_profit >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                            {Number(summary.net_profit).toLocaleString('ar-EG', { minimumFractionDigits: 2 })}
+                            {formatNumber(summary.net_profit)}
                             <span className="text-xs font-normal text-slate-400 mr-1">ج.م</span>
                         </div>
                         <div className="text-[11px] text-emerald-400/80 mt-2">
@@ -240,7 +241,7 @@ export default function Index({ summary, top_products, filters }) {
                                 <div className="flex justify-between text-xs mb-1">
                                     <span className="text-slate-300 font-medium">كاش نقدي</span>
                                     <span className="text-emerald-400 font-mono font-bold">
-                                        {Number(summary.cash_sales).toFixed(2)} ج.م
+                                        {formatCurrency(summary.cash_sales)}
                                     </span>
                                 </div>
                                 <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden">
@@ -257,7 +258,7 @@ export default function Index({ summary, top_products, filters }) {
                                 <div className="flex justify-between text-xs mb-1">
                                     <span className="text-slate-300 font-medium">بطاقة فيزا / إلكتروني</span>
                                     <span className="text-indigo-400 font-mono font-bold">
-                                        {Number(summary.card_sales).toFixed(2)} ج.م
+                                        {formatCurrency(summary.card_sales)}
                                     </span>
                                 </div>
                                 <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden">
@@ -283,7 +284,7 @@ export default function Index({ summary, top_products, filters }) {
                                 <div className="flex justify-between text-xs mb-1">
                                     <span className="text-slate-300 font-medium">مبيعات الكاشير بالمحل (قطاعي)</span>
                                     <span className="text-cyan-400 font-mono font-bold">
-                                        {Number(summary.retail_sales).toFixed(2)} ج.م
+                                        {formatCurrency(summary.retail_sales)}
                                     </span>
                                 </div>
                                 <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden">
@@ -300,7 +301,7 @@ export default function Index({ summary, top_products, filters }) {
                                 <div className="flex justify-between text-xs mb-1">
                                     <span className="text-slate-300 font-medium">مبيعات سيارات المناديب (جملة)</span>
                                     <span className="text-purple-400 font-mono font-bold">
-                                        {Number(summary.wholesale_sales).toFixed(2)} ج.م
+                                        {formatCurrency(summary.wholesale_sales)}
                                     </span>
                                 </div>
                                 <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden">
@@ -325,7 +326,7 @@ export default function Index({ summary, top_products, filters }) {
                             <div>
                                 <div className="text-xs text-slate-400">إجمالي المسافات المقطوعة</div>
                                 <div className="text-2xl font-black text-amber-400 font-mono mt-1">
-                                    {Number(summary.total_km_driven).toLocaleString()} <span className="text-xs font-normal text-slate-400">كم</span>
+                                    {formatNumber(summary.total_km_driven)} <span className="text-xs font-normal text-slate-400">كم</span>
                                 </div>
                             </div>
                             <Gauge className="w-10 h-10 text-amber-500/30" />
@@ -365,10 +366,10 @@ export default function Index({ summary, top_products, filters }) {
                                             <td className="p-4 text-slate-500 font-mono font-bold">{idx + 1}</td>
                                             <td className="p-4 text-white font-bold text-sm">{item.product_name}</td>
                                             <td className="p-4 font-mono text-slate-200">
-                                                {Number(item.total_qty).toLocaleString()} قطعة
+                                                {formatNumber(item.total_qty)} قطعة
                                             </td>
                                             <td className="p-4 font-mono font-bold text-emerald-400 text-sm">
-                                                {Number(item.total_revenue).toFixed(2)} ج.م
+                                                {formatCurrency(item.total_revenue)}
                                             </td>
                                         </tr>
                                     ))

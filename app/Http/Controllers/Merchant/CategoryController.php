@@ -12,9 +12,33 @@ use Inertia\Response;
 
 class CategoryController extends Controller
 {
+    protected function getTenant(): Tenant
+    {
+        if (app()->bound(Tenant::class)) {
+            return app(Tenant::class);
+        }
+
+        $tenant = auth()->user()?->tenant ?? Tenant::first();
+        if (!$tenant) {
+            abort(403, 'لا يوجد متجر متاح');
+        }
+
+        app()->instance(Tenant::class, $tenant);
+        return $tenant;
+    }
+
+    protected function resolveCategory(Category|string|int $category): Category
+    {
+        if ($category instanceof Category) {
+            return $category;
+        }
+
+        return Category::findOrFail((int) $category);
+    }
+
     public function index(): Response
     {
-        $tenant = app(Tenant::class);
+        $tenant = $this->getTenant();
         $categories = Category::where('tenant_id', $tenant->id)
             ->withCount('products')
             ->latest()
@@ -25,27 +49,37 @@ class CategoryController extends Controller
         ]);
     }
 
-    public function store(Request $request): RedirectResponse
+    public function store(Request $request)
     {
-        $tenant = app(Tenant::class);
+        $tenant = $this->getTenant();
 
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'color' => 'nullable|string|max:20',
         ]);
 
-        $tenant->categories()->create([
+        $category = $tenant->categories()->create([
             'name' => $validated['name'],
             'color' => $validated['color'] ?? '#3B82F6',
             'is_active' => true,
         ]);
 
+        // إذا كان الطلب من نافذة إنشاء القسم السريعة عبر Axios وليس طلباً من Inertia
+        if (!$request->header('X-Inertia') && ($request->has('json') || $request->wantsJson() || $request->ajax())) {
+            return response()->json([
+                'success' => true,
+                'category' => $category,
+                'message' => 'تمت إضافة القسم بنجاح',
+            ]);
+        }
+
         return back()->with('success', 'تمت إضافة القسم بنجاح');
     }
 
-    public function update(Request $request, Category $category): RedirectResponse
+    public function update(Request $request, Category|string|int $category): RedirectResponse
     {
-        $tenant = app(Tenant::class);
+        $category = $this->resolveCategory($category);
+        $tenant = $this->getTenant();
         if ($category->tenant_id !== $tenant->id) abort(403);
 
         $validated = $request->validate([
@@ -59,9 +93,10 @@ class CategoryController extends Controller
         return back()->with('success', 'تم تعديل بيانات القسم بنجاح');
     }
 
-    public function destroy(Category $category): RedirectResponse
+    public function destroy(Category|string|int $category): RedirectResponse
     {
-        $tenant = app(Tenant::class);
+        $category = $this->resolveCategory($category);
+        $tenant = $this->getTenant();
         if ($category->tenant_id !== $tenant->id) abort(403);
 
         if ($category->products()->count() > 0) {

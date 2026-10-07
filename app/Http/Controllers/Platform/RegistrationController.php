@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Platform;
 
+use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Controller;
 use App\Models\KashierTransaction;
 use App\Models\Subscription;
@@ -13,6 +14,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
@@ -70,31 +72,29 @@ class RegistrationController extends Controller
             'email' => 'required|string|email|max:255|unique:users,email',
             'phone' => 'required|string|max:20',
             'password' => 'required|string|min:8|confirmed',
-            'plan_id' => 'required|exists:subscription_plans,id',
-            'billing_cycle' => 'required|in:monthly,yearly',
-            'extra_employees' => 'nullable|integer|min:0',
+            'plan_id' => 'nullable|exists:subscription_plans,id',
+            'billing_cycle' => 'nullable|in:monthly,yearly',
         ]);
 
-        $plan = SubscriptionPlan::findOrFail($validated['plan_id']);
-        $extraEmployees = (int) ($validated['extra_employees'] ?? 0);
-        $isYearly = $validated['billing_cycle'] === 'yearly';
+        $plan = !empty($validated['plan_id']) 
+            ? SubscriptionPlan::find($validated['plan_id']) 
+            : SubscriptionPlan::where('is_active', true)->first();
 
-        $basePrice = $isYearly ? $plan->price_yearly : $plan->price_monthly;
-        $extraCostPerMonth = $extraEmployees * $plan->extra_employee_price;
-        $extraCostTotal = $isYearly ? ($extraCostPerMonth * 12) : $extraCostPerMonth;
-        $totalPrice = $basePrice + $extraCostTotal;
-
+        // تجربة مجانية لمدة أسبوع (7 أيام) بحد أقصى 2 موظف
+        $trialDays = 7;
+        $trialEndsAt = now()->addDays($trialDays)->endOfDay();
         $tenant = null;
         $user = null;
-        $subscription = null;
 
-        DB::transaction(function () use ($validated, $plan, $basePrice, $extraEmployees, $extraCostTotal, $totalPrice, &$tenant, &$user, &$subscription) {
+        DB::transaction(function () use ($validated, $plan, $trialEndsAt, &$tenant, &$user) {
             $tenant = Tenant::create([
                 'name' => $validated['store_name'],
                 'slug' => strtolower($validated['slug']),
                 'phone' => $validated['phone'],
                 'email' => $validated['email'],
-                'subscription_status' => 'pending',
+                'subscription_status' => 'trial',
+                'trial_ends_at' => $trialEndsAt,
+                'subscription_ends_at' => $trialEndsAt,
                 'is_active' => true,
             ]);
 
@@ -110,53 +110,46 @@ class RegistrationController extends Controller
 
             $tenant->update(['owner_id' => $user->id]);
 
-            $subscription = Subscription::create([
+            // إنشاء اشتراك الفترة التجريبية (مجاني 7 أيام - 2 موظف)
+            Subscription::create([
                 'tenant_id' => $tenant->id,
-                'plan_id' => $plan->id,
-                'billing_cycle' => $validated['billing_cycle'],
-                'base_price' => $basePrice,
-                'extra_employees_count' => $extraEmployees,
-                'extra_employees_cost' => $extraCostTotal,
-                'total_price' => $totalPrice,
-                'status' => 'pending',
-                'payment_method' => 'kashier',
-                'payment_reference' => 'KASH-' . strtoupper(Str::random(10)),
+                'plan_id' => $plan?->id,
+                'billing_cycle' => $validated['billing_cycle'] ?? 'monthly',
+                'base_price' => 0,
+                'extra_employees_count' => 0,
+                'extra_employees_cost' => 0,
+                'total_price' => 0,
+                'status' => 'trial',
+                'starts_at' => now(),
+                'ends_at' => $trialEndsAt,
+                'payment_method' => 'trial',
+                'payment_reference' => 'TRIAL-7DAYS-' . strtoupper(Str::random(8)),
             ]);
         });
 
-        // إنشاء معاملة Kashier وتوليد رابط الدفع
-        $orderId = 'ORD-' . $subscription->id . '-' . time();
-        $hash = $this->kashierService->generateHash($orderId, $totalPrice, 'EGP');
+        // تسجيل الدخول المباشر لمالك المتجر
+        Auth::login($user, true);
 
-        KashierTransaction::create([
-            'tenant_id' => $tenant->id,
-            'subscription_id' => $subscription->id,
-            'kashier_order_id' => $orderId,
-            'amount' => $totalPrice,
-            'currency' => 'EGP',
-            'status' => 'pending',
-            'payload' => [
-                'plan_name' => $plan->name,
-                'billing_cycle' => $validated['billing_cycle'],
-                'extra_employees' => $extraEmployees,
-            ],
-        ]);
+        // إنشاء SSO Token لنقل الجلسة بسلاسة إلى النطاق الفرعي للمتجر
+        $ssoToken = Str::random(64);
+        Cache::put('sso_token_' . $ssoToken, [
+            'user_id' => $user->id,
+            'target' => '/admin/dashboard',
+        ], now()->addMinutes(5));
 
-        return Inertia::render('Platform/Checkout', [
-            'tenant' => $tenant,
-            'subscription' => $subscription,
-            'plan' => $plan,
-            'paymentData' => [
-                'merchantId' => $this->kashierService->getMerchantId(),
-                'orderId' => $orderId,
-                'amount' => $totalPrice,
-                'currency' => 'EGP',
-                'hash' => $hash,
-                'mode' => $this->kashierService->getMode(),
-                'baseUrl' => $this->kashierService->getBaseUrl(),
-                'callbackUrl' => route('platform.payment.callback'),
-            ],
-        ]);
+        $baseDomain = AuthenticatedSessionController::getCentralBaseDomain($request);
+        $scheme = $request->getScheme();
+        $port = $request->getPort();
+        $portStr = ($port && $port != 80 && $port != 443) ? ':' . $port : '';
+
+        // توجيه المستخدم دائماً إلى النطاق الفرعي لمتجره الجديد
+        $redirectUrl = AuthenticatedSessionController::getDashboardUrl($user);
+
+        if ($request->header('X-Inertia')) {
+            return Inertia::location($redirectUrl);
+        }
+
+        return redirect()->away($redirectUrl);
     }
 
     public function kashierCallback(Request $request)

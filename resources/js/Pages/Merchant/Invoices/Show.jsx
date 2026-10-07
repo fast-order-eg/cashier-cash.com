@@ -2,6 +2,7 @@ import React from 'react';
 import { Head, Link } from '@inertiajs/react';
 import MerchantLayout from '@/Layouts/MerchantLayout';
 import { ArrowRight, Printer, FileText, Calendar, User, DollarSign } from 'lucide-react';
+import { formatNumber, formatCurrency, formatDate, formatDateTime } from '@/utils/formatters';
 
 export default function Show({ invoice, storeSettings }) {
     const profit = Number(invoice.total_amount) - Number(invoice.cost_total);
@@ -63,7 +64,7 @@ export default function Show({ invoice, storeSettings }) {
                         <div>
                             <span className="text-slate-400 block">التاريخ والوقت:</span>
                             <span className="font-bold text-white mt-1 block">
-                                {new Date(invoice.created_at).toLocaleString('ar-EG')}
+                                {formatDateTime(invoice.created_at)}
                             </span>
                         </div>
                     </div>
@@ -83,10 +84,10 @@ export default function Show({ invoice, storeSettings }) {
                                 {invoice.items?.map((item) => (
                                     <tr key={item.id}>
                                         <td className="p-3.5 font-bold text-white">{item.product_name}</td>
-                                        <td className="p-3.5 text-center font-mono">{item.quantity}</td>
-                                        <td className="p-3.5 font-mono">{Number(item.unit_price).toFixed(2)} ج.م</td>
+                                        <td className="p-3.5 text-center font-mono">{formatNumber(item.quantity)}</td>
+                                        <td className="p-3.5 font-mono">{formatCurrency(item.unit_price)}</td>
                                         <td className="p-3.5 font-mono font-bold text-emerald-400">
-                                            {Number(item.total_price).toFixed(2)} ج.م
+                                            {formatCurrency(item.total_price)}
                                         </td>
                                     </tr>
                                 ))}
@@ -98,17 +99,17 @@ export default function Show({ invoice, storeSettings }) {
                     <div className="p-4 rounded-2xl bg-slate-950 border border-slate-850 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 text-xs">
                         <div className="space-y-1">
                             <div className="text-slate-400">
-                                تكلفة شراء البضاعة: <strong className="text-slate-300 font-mono">{Number(invoice.cost_total).toFixed(2)} ج.م</strong>
+                                تكلفة شراء البضاعة: <strong className="text-slate-300 font-mono">{formatCurrency(invoice.cost_total)}</strong>
                             </div>
                             <div className="text-slate-400">
-                                صافي الربح من الفاتورة: <strong className="text-emerald-400 font-mono font-bold">+{profit.toFixed(2)} ج.م</strong>
+                                صافي الربح من الفاتورة: <strong className="text-emerald-400 font-mono font-bold">+{formatCurrency(profit)}</strong>
                             </div>
                         </div>
 
                         <div className="text-left sm:text-right">
                             <span className="text-slate-400 text-xs">المبلغ الإجمالي للفاتورة:</span>
                             <div className="text-2xl font-black text-white font-mono mt-0.5">
-                                {Number(invoice.total_amount).toFixed(2)} ج.م
+                                {formatCurrency(invoice.total_amount)}
                             </div>
                             <span className="text-[11px] text-slate-500">
                                 طريقة الدفع: {invoice.payment_method === 'cash' ? 'نقدي' : 'فيزا'}

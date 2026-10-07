@@ -31,6 +31,16 @@ class HandleInertiaRequests extends Middleware
     public function share(Request $request): array
     {
         $tenant = app()->bound(Tenant::class) ? app(Tenant::class) : null;
+        if (!$tenant && $request->user()) {
+            $tenant = $request->user()->tenant;
+        }
+        if (!$tenant && session()->has('tenant_id')) {
+            $tenant = Tenant::find(session('tenant_id'));
+        }
+
+        if ($tenant) {
+            \Illuminate\Support\Facades\URL::defaults(['tenant' => $tenant->slug]);
+        }
 
         return [
             ...parent::share($request),
@@ -56,12 +66,24 @@ class HandleInertiaRequests extends Middleware
                 'settings' => $tenant->settings,
                 'subscription_status' => $tenant->subscription_status,
                 'subscription_ends_at' => $tenant->subscription_ends_at?->format('Y-m-d'),
+                'trial_ends_at' => $tenant->trial_ends_at?->format('Y-m-d'),
+                'is_trial' => $tenant->subscription_status === 'trial',
+                'trial_days_remaining' => $tenant->trial_ends_at ? max(0, (int) now()->diffInDays($tenant->trial_ends_at, false)) : 0,
+                'max_allowed_employees' => $tenant->maxAllowedEmployees(),
                 'is_subscription_expired' => $tenant->isSubscriptionExpired(),
             ] : null,
             'flash' => [
                 'success' => fn () => $request->session()->get('success'),
                 'error' => fn () => $request->session()->get('error'),
                 'warning' => fn () => $request->session()->get('warning'),
+                'import_result' => fn () => $request->session()->get('import_result'),
+            ],
+            'impersonation' => [
+                'active' => (bool) ($request->attributes->get('is_impersonating') || session()->has('impersonated_by_admin')),
+                'target_role' => $request->attributes->get('impersonated_target') ?? session('impersonated_target', 'admin'),
+                'user_name' => $request->attributes->get('impersonated_user_name') ?? session('impersonated_user_name', ''),
+                'user_role' => $request->attributes->get('impersonated_user_role') ?? session('impersonated_user_role', ''),
+                'leave_url' => \Illuminate\Support\Facades\Route::has('merchant.impersonate.leave') ? route('merchant.impersonate.leave') : '/admin/impersonate-leave',
             ],
             'appName' => config('app.name', 'Casher System'),
         ];

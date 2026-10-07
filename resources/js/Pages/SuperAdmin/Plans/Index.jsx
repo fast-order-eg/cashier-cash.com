@@ -11,6 +11,7 @@ import {
     Sparkles, 
     X 
 } from 'lucide-react';
+import { formatNumber, formatCurrency, formatDate, formatDateTime } from '@/utils/formatters';
 
 export default function Index({ plans }) {
     const [modalOpen, setModalOpen] = useState(false);
@@ -102,7 +103,7 @@ export default function Index({ plans }) {
                                 <div className="flex items-center justify-between">
                                     <h3 className="text-lg font-bold text-white">{plan.name}</h3>
                                     <span className="px-2.5 py-1 rounded-lg bg-indigo-500/10 text-indigo-400 text-xs font-semibold">
-                                        {plan.subscriptions_count} مشترك
+                                        {formatNumber(plan.subscriptions_count)} مشترك
                                     </span>
                                 </div>
 
@@ -110,11 +111,11 @@ export default function Index({ plans }) {
 
                                 <div className="pt-2 border-t border-slate-700/60">
                                     <div className="flex items-baseline gap-1">
-                                        <span className="text-3xl font-black text-white">{Number(plan.price_monthly)}</span>
+                                        <span className="text-3xl font-black text-white">{formatNumber(plan.price_monthly)}</span>
                                         <span className="text-xs text-slate-400">ج.م / شهرياً</span>
                                     </div>
                                     <div className="text-xs text-slate-400 mt-1">
-                                        {Number(plan.price_yearly)} ج.م سنوياً (خصم شهرين)
+                                        {formatNumber(plan.price_yearly)} ج.م سنوياً (خصم شهرين)
                                     </div>
                                 </div>
 
@@ -124,11 +125,11 @@ export default function Index({ plans }) {
                                             <Users size={14} className="text-indigo-400" />
                                             <span>الموظفين الأساسيين:</span>
                                         </span>
-                                        <span className="font-bold text-white">{plan.max_employees} موظفين</span>
+                                        <span className="font-bold text-white">{formatNumber(plan.max_employees)} موظفين</span>
                                     </div>
                                     <div className="flex items-center justify-between text-slate-300">
                                         <span>سعر الموظف الإضافي:</span>
-                                        <span className="font-bold text-emerald-400">+{Number(plan.extra_employee_price)} ج.م / شهر</span>
+                                        <span className="font-bold text-emerald-400">+{formatNumber(plan.extra_employee_price)} ج.م / شهر</span>
                                     </div>
                                 </div>
 

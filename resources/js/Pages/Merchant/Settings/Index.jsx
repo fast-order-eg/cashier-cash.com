@@ -22,7 +22,7 @@ export default function Index({ tenant }) {
 
     const handleSubmit = (e) => {
         e.preventDefault();
-        post(route('admin.settings.update'));
+        post('/admin/settings');
     };
 
     return (
@@ -58,18 +58,6 @@ export default function Index({ tenant }) {
                             </div>
 
                             <div>
-                                <label className="block font-semibold text-slate-300 mb-1.5">العملة الافتراضية</label>
-                                <input
-                                    type="text"
-                                    required
-                                    value={data.currency}
-                                    onChange={(e) => setData('currency', e.target.value)}
-                                    placeholder="ج.م"
-                                    className="w-full bg-slate-950 border border-slate-700 rounded-2xl px-4 py-2.5 text-white"
-                                />
-                            </div>
-
-                            <div>
                                 <label className="block font-semibold text-slate-300 mb-1.5">رقم الهاتف</label>
                                 <input
                                     type="text"
@@ -79,7 +67,7 @@ export default function Index({ tenant }) {
                                 />
                             </div>
 
-                            <div>
+                            <div className="sm:col-span-2">
                                 <label className="block font-semibold text-slate-300 mb-1.5">العنوان</label>
                                 <input
                                     type="text"

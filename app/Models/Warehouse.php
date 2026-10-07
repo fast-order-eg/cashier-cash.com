@@ -36,6 +36,11 @@ class Warehouse extends Model
         return $this->hasMany(ProductWarehouseStock::class);
     }
 
+    public function stocks(): HasMany
+    {
+        return $this->productStocks();
+    }
+
     public function isVan(): bool
     {
         return $this->type === 'van';

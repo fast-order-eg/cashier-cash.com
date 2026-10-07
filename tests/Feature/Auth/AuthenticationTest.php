@@ -12,29 +12,31 @@ class AuthenticationTest extends TestCase
 
     public function test_login_screen_can_be_rendered(): void
     {
-        $response = $this->get('/login');
+        $response = $this->get('http://app.localhost:8000/login');
 
         $response->assertStatus(200);
     }
 
     public function test_users_can_authenticate_using_the_login_screen(): void
     {
-        $user = User::factory()->create();
+        $user = User::factory()->create([
+            'role' => 'super_admin',
+        ]);
 
-        $response = $this->post('/login', [
+        $response = $this->post('http://app.localhost:8000/login', [
             'email' => $user->email,
             'password' => 'password',
         ]);
 
         $this->assertAuthenticated();
-        $response->assertRedirect(route('dashboard', absolute: false));
+        $response->assertRedirect('http://app.localhost:8000/admin/dashboard');
     }
 
     public function test_users_can_not_authenticate_with_invalid_password(): void
     {
         $user = User::factory()->create();
 
-        $this->post('/login', [
+        $this->post('http://app.localhost:8000/login', [
             'email' => $user->email,
             'password' => 'wrong-password',
         ]);
@@ -46,9 +48,9 @@ class AuthenticationTest extends TestCase
     {
         $user = User::factory()->create();
 
-        $response = $this->actingAs($user)->post('/logout');
+        $response = $this->actingAs($user)->post('http://app.localhost:8000/logout');
 
         $this->assertGuest();
-        $response->assertRedirect('/');
+        $response->assertRedirect('http://app.localhost:8000/login');
     }
 }

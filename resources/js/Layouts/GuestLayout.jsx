@@ -1,17 +1,20 @@
 import ApplicationLogo from '@/Components/ApplicationLogo';
-import { Link } from '@inertiajs/react';
 
 export default function GuestLayout({ children }) {
     return (
-        <div className="flex min-h-screen flex-col items-center bg-gray-100 pt-6 sm:justify-center sm:pt-0">
-            <div>
-                <Link href="/">
-                    <ApplicationLogo className="h-20 w-20 fill-current text-gray-500" />
-                </Link>
+        <div dir="rtl" className="flex min-h-screen flex-col items-center justify-center bg-slate-950 px-4 py-8 font-sans selection:bg-indigo-500 selection:text-white">
+            <div className="mb-6">
+                <a href="/" className="transition hover:opacity-90">
+                    <ApplicationLogo withText={true} className="w-14 h-14" textClassName="text-white text-2xl" />
+                </a>
             </div>
 
-            <div className="mt-6 w-full overflow-hidden bg-white px-6 py-4 shadow-md sm:max-w-md sm:rounded-lg">
+            <div className="w-full overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/90 p-8 shadow-2xl backdrop-blur sm:max-w-md">
                 {children}
+            </div>
+
+            <div className="mt-8 text-center text-xs text-slate-500">
+                <span>نظام كاشير وسيارات جملة • يعمل أونلاين وأوفلاين</span>
             </div>
         </div>
     );

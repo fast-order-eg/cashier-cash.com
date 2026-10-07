@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Head, Link } from '@inertiajs/react';
 import MerchantLayout from '@/Layouts/MerchantLayout';
 import { 
@@ -11,10 +11,15 @@ import {
     Truck, 
     FileText, 
     ArrowUpRight,
-    Package
+    Package,
+    User,
+    X
 } from 'lucide-react';
+import { formatNumber, formatCurrency, formatDate, formatDateTime } from '@/utils/formatters';
 
-export default function Dashboard({ stats, low_stock_products, active_shifts, active_van_trips, recent_invoices }) {
+export default function Dashboard({ stats, low_stock_products, active_shifts, active_van_trips, recent_invoices, cashiers = [] }) {
+    const [cashierSelectModalOpen, setCashierSelectModalOpen] = useState(false);
+
     return (
         <MerchantLayout title="لوحة التحكم">
             <Head title="لوحة تحكم المتجر" />
@@ -29,20 +34,19 @@ export default function Dashboard({ stats, low_stock_products, active_shifts, ac
 
                     <div className="flex items-center gap-3">
                         <Link
-                            href={route('admin.products.create')}
+                            href="/admin/products/create"
                             className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition"
                         >
                             + إضافة صنف جديد
                         </Link>
-                        <a
-                            href={route('cashier.pos')}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-lg shadow-emerald-600/30 flex items-center gap-1.5 transition"
+                        <button
+                            type="button"
+                            onClick={() => setCashierSelectModalOpen(true)}
+                            className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-lg shadow-emerald-600/30 flex items-center gap-1.5 transition cursor-pointer"
                         >
                             <Scan size={15} />
                             <span>فتح الكاشير</span>
-                        </a>
+                        </button>
                     </div>
                 </div>
 
@@ -56,7 +60,7 @@ export default function Dashboard({ stats, low_stock_products, active_shifts, ac
                             </span>
                         </div>
                         <Link
-                            href={route('admin.products.index', { negative_stock: true })}
+                            href="/admin/products?negative_stock=true"
                             className="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold transition flex-shrink-0"
                         >
                             عرض الأصناف السالبة
@@ -75,11 +79,11 @@ export default function Dashboard({ stats, low_stock_products, active_shifts, ac
                             </div>
                         </div>
                         <div className="mt-3 flex items-baseline gap-1.5">
-                            <span className="text-2xl font-black text-white">{Number(stats.today_sales).toLocaleString('en-US')}</span>
+                            <span className="text-2xl font-black text-white">{formatNumber(stats.today_sales)}</span>
                             <span className="text-xs text-slate-400">ج.م</span>
                         </div>
                         <div className="text-[11px] text-slate-400 mt-1">
-                            من إجمالي {stats.today_invoices_count} فاتورة
+                            من إجمالي {formatNumber(stats.today_invoices_count)} فاتورة
                         </div>
                     </div>
 
@@ -93,7 +97,7 @@ export default function Dashboard({ stats, low_stock_products, active_shifts, ac
                         </div>
                         <div className="mt-3 flex items-baseline gap-1.5">
                             <span className={`text-2xl font-black ${stats.today_net_profit >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                                {Number(stats.today_net_profit).toLocaleString('en-US')}
+                                {formatNumber(stats.today_net_profit)}
                             </span>
                             <span className="text-xs text-slate-400">ج.م</span>
                         </div>
@@ -111,10 +115,10 @@ export default function Dashboard({ stats, low_stock_products, active_shifts, ac
                             </div>
                         </div>
                         <div className="mt-3 flex items-baseline gap-1.5">
-                            <span className="text-2xl font-black text-white">{Number(stats.today_expenses).toLocaleString('en-US')}</span>
+                            <span className="text-2xl font-black text-white">{formatNumber(stats.today_expenses)}</span>
                             <span className="text-xs text-slate-400">ج.م</span>
                         </div>
-                        <Link href={route('admin.expenses.index')} className="text-[11px] text-indigo-400 hover:underline mt-1 inline-block">
+                        <Link href="/admin/expenses" className="text-[11px] text-indigo-400 hover:underline mt-1 inline-block">
                             تفاصيل المصروفات →
                         </Link>
                     </div>
@@ -128,11 +132,11 @@ export default function Dashboard({ stats, low_stock_products, active_shifts, ac
                             </div>
                         </div>
                         <div className="mt-3 flex items-baseline gap-1.5">
-                            <span className="text-2xl font-black text-white">{Number(stats.month_net_profit).toLocaleString('en-US')}</span>
+                            <span className="text-2xl font-black text-white">{formatNumber(stats.month_net_profit)}</span>
                             <span className="text-xs text-slate-400">ج.م</span>
                         </div>
                         <div className="text-[11px] text-slate-400 mt-1">
-                            إجمالي مبيعات الشهر: {Number(stats.month_sales).toLocaleString('en-US')} ج.م
+                            إجمالي مبيعات الشهر: {formatCurrency(stats.month_sales)}
                         </div>
                     </div>
                 </div>
@@ -160,12 +164,12 @@ export default function Dashboard({ stats, low_stock_products, active_shifts, ac
                                         <div>
                                             <div className="font-bold text-white">{shift.cashier?.name}</div>
                                             <div className="text-slate-400 mt-0.5">
-                                                عهدة البداية: {shift.opening_balance} ج.م • فُتحت: {new Date(shift.opened_at).toLocaleTimeString('ar-EG')}
+                                                عهدة البداية: {formatCurrency(shift.opening_balance)} • فُتحت: {formatDateTime(shift.opened_at)}
                                             </div>
                                         </div>
                                         <div className="text-right">
-                                            <div className="font-bold text-emerald-400">{shift.cash_sales} ج.م كاش</div>
-                                            <div className="text-slate-400">{shift.card_sales} ج.م فيزا</div>
+                                            <div className="font-bold text-emerald-400">{formatCurrency(shift.cash_sales)} كاش</div>
+                                            <div className="text-slate-400">{formatCurrency(shift.card_sales)} فيزا</div>
                                         </div>
                                     </div>
                                 ))}
@@ -181,7 +185,7 @@ export default function Dashboard({ stats, low_stock_products, active_shifts, ac
                                 <span>رحلات سيارات المناديب النشطة</span>
                             </h3>
                             <span className="px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 text-xs font-semibold">
-                                {active_van_trips.length} سيارة
+                                {formatNumber(active_van_trips.length)} سيارة
                             </span>
                         </div>
 
@@ -194,12 +198,12 @@ export default function Dashboard({ stats, low_stock_products, active_shifts, ac
                                         <div>
                                             <div className="font-bold text-white">{trip.sales_rep?.name}</div>
                                             <div className="text-slate-400 mt-0.5">
-                                                {trip.warehouse?.name} • عداد البداية: {trip.start_odometer} كم
+                                                {trip.warehouse?.name} • عداد البداية: {formatNumber(trip.start_odometer)} كم
                                             </div>
                                         </div>
                                         <div className="text-right">
-                                            <div className="font-bold text-indigo-400">{trip.total_sales} ج.م مبيعات</div>
-                                            <div className="text-slate-400">محصل: {trip.total_cash_collected} ج.م</div>
+                                            <div className="font-bold text-indigo-400">{formatCurrency(trip.total_sales)} مبيعات</div>
+                                            <div className="text-slate-400">محصل: {formatCurrency(trip.total_cash_collected)}</div>
                                         </div>
                                     </div>
                                 ))}
@@ -214,7 +218,7 @@ export default function Dashboard({ stats, low_stock_products, active_shifts, ac
                     <div className="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-2xl p-6">
                         <div className="flex items-center justify-between mb-4">
                             <h3 className="font-bold text-white text-base">أحدث فواتير المبيعات</h3>
-                            <Link href={route('admin.invoices.index')} className="text-indigo-400 text-xs font-semibold flex items-center gap-1 hover:underline">
+                            <Link href="/admin/invoices" className="text-indigo-400 text-xs font-semibold flex items-center gap-1 hover:underline">
                                 <span>عرض السجل كاملاً</span>
                                 <ArrowUpRight size={14} />
                             </Link>
@@ -244,13 +248,13 @@ export default function Dashboard({ stats, low_stock_products, active_shifts, ac
                                                 </span>
                                             </td>
                                             <td className="py-3 text-slate-300">{inv.cashier?.name || inv.sales_rep?.name || 'المدير'}</td>
-                                            <td className="py-3 font-bold text-white">{inv.total_amount} ج.م</td>
+                                            <td className="py-3 font-bold text-white">{formatCurrency(inv.total_amount)}</td>
                                             <td className="py-3">
                                                 <span className="px-2 py-0.5 rounded-md bg-slate-800 text-slate-300 text-[10px]">
                                                     {inv.payment_method === 'cash' ? 'نقدي' : 'فيزا'}
                                                 </span>
                                             </td>
-                                            <td className="py-3 text-slate-400">{new Date(inv.created_at).toLocaleTimeString('ar-EG')}</td>
+                                            <td className="py-3 text-slate-400">{formatDateTime(inv.created_at)}</td>
                                         </tr>
                                     ))}
                                 </tbody>
@@ -265,7 +269,7 @@ export default function Dashboard({ stats, low_stock_products, active_shifts, ac
                                 <Package size={18} className="text-amber-400" />
                                 <span>نواقص المخزون</span>
                             </h3>
-                            <Link href={route('admin.products.index', { low_stock: true })} className="text-indigo-400 text-xs font-semibold hover:underline">
+                            <Link href="/admin/products?low_stock=true" className="text-indigo-400 text-xs font-semibold hover:underline">
                                 الكل
                             </Link>
                         </div>
@@ -281,7 +285,7 @@ export default function Dashboard({ stats, low_stock_products, active_shifts, ac
                                         <span className={`px-2 py-1 rounded-lg font-bold text-xs ${
                                             p.stock_quantity < 0 ? 'bg-rose-500/10 text-rose-400' : 'bg-amber-500/10 text-amber-400'
                                         }`}>
-                                            {p.stock_quantity} {p.unit}
+                                            {formatNumber(p.stock_quantity)} {p.unit}
                                         </span>
                                     </div>
                                 </div>
@@ -290,6 +294,99 @@ export default function Dashboard({ stats, low_stock_products, active_shifts, ac
                     </div>
                 </div>
             </div>
+
+            {/* Cashier Selection Modal */}
+            {cashierSelectModalOpen && (
+                <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+                    <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-md p-6 space-y-4 shadow-2xl">
+                        <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                            <div className="flex items-center gap-2.5">
+                                <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center font-bold">
+                                    <Scan size={20} />
+                                </div>
+                                <div>
+                                    <h3 className="text-base font-extrabold text-white">بدء شاشة الكاشير (POS)</h3>
+                                    <p className="text-xs text-slate-400">اختر الموظف أو الكاشير لبدء نقطة البيع</p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => setCashierSelectModalOpen(false)}
+                                className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition"
+                            >
+                                <X size={18} />
+                            </button>
+                        </div>
+
+                        <div className="space-y-2 max-h-[60vh] overflow-y-auto pr-1">
+                            {cashiers.length === 0 ? (
+                                <div className="text-center py-6 text-slate-400 text-xs">
+                                    لا يوجد موظفو كاشير مسجلون حالياً. يمكنك المتابعة بحساب المدير.
+                                </div>
+                            ) : (
+                                cashiers.map((c) => (
+                                    <a
+                                        key={c.id}
+                                        href={`/pos?cashier_id=${c.id}`}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        onClick={() => setCashierSelectModalOpen(false)}
+                                        className="w-full p-3.5 rounded-2xl bg-slate-950/70 border border-slate-800 hover:border-emerald-500/50 hover:bg-slate-800/50 flex items-center justify-between group transition"
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-9 h-9 rounded-xl bg-slate-800 text-slate-300 group-hover:bg-emerald-500/20 group-hover:text-emerald-400 flex items-center justify-center font-bold text-xs transition">
+                                                <User size={16} />
+                                            </div>
+                                            <div className="text-right">
+                                                <div className="text-xs font-bold text-white group-hover:text-emerald-300 transition flex items-center gap-2">
+                                                    <span>{c.name}</span>
+                                                    {c.role === 'admin' ? (
+                                                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 font-normal">مدير</span>
+                                                    ) : (
+                                                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-normal">كاشير</span>
+                                                    )}
+                                                </div>
+                                                <span className="text-[11px] text-slate-400 block mt-0.5">{c.email}</span>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex items-center gap-2">
+                                            {c.has_open_shift ? (
+                                                <span className="text-[10px] font-bold px-2 py-1 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                                                    وردية مفتوحة
+                                                </span>
+                                            ) : (
+                                                <span className="text-[10px] text-slate-400 px-2 py-1 rounded-lg bg-slate-800/80">
+                                                    لا توجد وردية
+                                                </span>
+                                            )}
+                                            <ArrowUpRight size={16} className="text-slate-500 group-hover:text-emerald-400 transition" />
+                                        </div>
+                                    </a>
+                                ))
+                            )}
+                        </div>
+
+                        <div className="pt-2 border-t border-slate-800 flex items-center justify-between">
+                            <a
+                                href="/pos"
+                                target="_blank"
+                                rel="noreferrer"
+                                onClick={() => setCashierSelectModalOpen(false)}
+                                className="text-xs text-indigo-400 hover:text-indigo-300 hover:underline flex items-center gap-1 font-semibold"
+                            >
+                                <span>أو الفتح بحسابي المباشر كمدير</span>
+                                <ArrowUpRight size={13} />
+                            </a>
+                            <button
+                                onClick={() => setCashierSelectModalOpen(false)}
+                                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition"
+                            >
+                                إغلاق
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </MerchantLayout>
     );
 }

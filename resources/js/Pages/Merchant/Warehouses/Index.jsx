@@ -11,12 +11,26 @@ import {
     History, 
     X, 
     CheckCircle,
-    Trash2
+    Trash2,
+    ChevronDown
 } from 'lucide-react';
+import { formatNumber, formatCurrency, formatDate, formatDateTime } from '@/utils/formatters';
 
 export default function Index({ warehouses, sales_reps, products, recent_dispatches }) {
     const [dispatchModalOpen, setDispatchModalOpen] = useState(false);
     const [newWarehouseModalOpen, setNewWarehouseModalOpen] = useState(false);
+
+    // دالة لتنظيف اسم سيارة المندوب ومنع التكرار وحذف كلمة "سيارة توزيع"
+    const getVanLabel = (w) => {
+        if (!w) return '';
+        const repName = w.sales_rep?.name ? w.sales_rep.name.replace(/\(.*?\)/g, '').trim() : '';
+        const plate = w.vehicle_plate ? ` (${w.vehicle_plate})` : '';
+        if (repName) {
+            return `${repName}${plate}`;
+        }
+        const cleanName = (w.name || '').replace(/سيارة\s*(توزيع)?\s*/g, '').replace(/\(.*?\)/g, '').trim();
+        return `${cleanName || 'سيارة'}${plate}`;
+    };
 
     // Form to create new warehouse/van
     const { 
@@ -66,7 +80,7 @@ export default function Index({ warehouses, sales_reps, products, recent_dispatc
 
     const handleCreateWarehouse = (e) => {
         e.preventDefault();
-        postWh(route('admin.warehouses.store'), {
+        postWh('/admin/warehouses', {
             onSuccess: () => {
                 setNewWarehouseModalOpen(false);
                 resetWh();
@@ -76,7 +90,7 @@ export default function Index({ warehouses, sales_reps, products, recent_dispatc
 
     const handleDispatchSubmit = (e) => {
         e.preventDefault();
-        postDisp(route('admin.warehouses.dispatch'), {
+        postDisp('/admin/warehouses/dispatch', {
             onSuccess: () => {
                 setDispatchModalOpen(false);
                 resetDisp();
@@ -128,9 +142,11 @@ export default function Index({ warehouses, sales_reps, products, recent_dispatc
                                         {wh.type === 'main' ? <Warehouse size={22} /> : <Truck size={22} />}
                                     </div>
                                     <div>
-                                        <h3 className="font-bold text-white text-base">{wh.name}</h3>
+                                        <h3 className="font-bold text-white text-base">
+                                            {wh.type === 'van' ? getVanLabel(wh) : wh.name}
+                                        </h3>
                                         <span className="text-[11px] text-slate-400 font-medium">
-                                            {wh.type === 'main' ? 'المستودع الرئيسي للمحل' : `سيارة توزيع • ${wh.vehicle_plate || 'بدون لوحة'}`}
+                                            {wh.type === 'main' ? 'المستودع الرئيسي للمحل' : (wh.vehicle_plate ? `لوحة: ${wh.vehicle_plate}` : 'سيارة مندوب')}
                                         </span>
                                     </div>
                                 </div>
@@ -139,7 +155,7 @@ export default function Index({ warehouses, sales_reps, products, recent_dispatc
                             {wh.type === 'van' && wh.sales_rep && (
                                 <div className="p-3 rounded-2xl bg-slate-950 border border-slate-850 flex items-center gap-2.5 text-xs text-slate-300">
                                     <User size={15} className="text-indigo-400" />
-                                    <span>المندوب المسؤول: <strong className="text-white">{wh.sales_rep.name}</strong></span>
+                                    <span>المندوب المسؤول: <strong className="text-white">{wh.sales_rep.name.replace(/\(.*?\)/g, '').trim()}</strong></span>
                                 </div>
                             )}
 
@@ -158,7 +174,7 @@ export default function Index({ warehouses, sales_reps, products, recent_dispatc
                                             <div key={ps.id} className="p-2 rounded-xl bg-slate-950 border border-slate-850/60 flex items-center justify-between text-xs">
                                                 <span className="text-slate-200 truncate max-w-[160px]">{ps.product?.name}</span>
                                                 <span className="font-mono font-bold text-emerald-400">
-                                                    {ps.quantity} {ps.product?.unit}
+                                                    {Math.round(ps.quantity)} {ps.product?.unit}
                                                 </span>
                                             </div>
                                         ))
@@ -193,14 +209,16 @@ export default function Index({ warehouses, sales_reps, products, recent_dispatc
                                     <tr key={disp.id} className="hover:bg-slate-850/40">
                                         <td className="py-3 font-mono font-bold text-indigo-400">{disp.reference_number}</td>
                                         <td className="py-3 text-slate-300">{disp.from_warehouse?.name}</td>
-                                        <td className="py-3 text-emerald-400 font-semibold">{disp.to_warehouse?.name}</td>
+                                        <td className="py-3 text-emerald-400 font-semibold">
+                                            {disp.to_warehouse?.type === 'van' ? getVanLabel(disp.to_warehouse) : disp.to_warehouse?.name}
+                                        </td>
                                         <td className="py-3 text-slate-400">{disp.dispatcher?.name || 'المدير'}</td>
                                         <td className="py-3">
                                             <span className="px-2 py-0.5 rounded-md bg-slate-800 text-white font-mono">
-                                                {disp.items?.length || 0} صنف
+                                                {formatNumber(disp.items?.length || 0)} صنف
                                             </span>
                                         </td>
-                                        <td className="py-3 text-slate-400">{new Date(disp.created_at).toLocaleString('ar-EG')}</td>
+                                        <td className="py-3 text-slate-400">{formatDateTime(disp.created_at)}</td>
                                     </tr>
                                 ))}
                             </tbody>
@@ -227,28 +245,36 @@ export default function Index({ warehouses, sales_reps, products, recent_dispatc
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <label className="block font-semibold text-slate-300 mb-1">من مخزن (المرسل)</label>
-                                    <select
-                                        value={dispData.from_warehouse_id}
-                                        onChange={(e) => setDispData('from_warehouse_id', e.target.value)}
-                                        className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-indigo-500"
-                                    >
-                                        {warehouses.map((w) => (
-                                            <option key={w.id} value={w.id}>{w.name}</option>
-                                        ))}
-                                    </select>
+                                    <div className="relative">
+                                        <select
+                                            value={dispData.from_warehouse_id}
+                                            onChange={(e) => setDispData('from_warehouse_id', e.target.value)}
+                                            className="w-full bg-slate-950 border border-slate-700 rounded-xl pl-10 pr-3.5 py-2 text-white appearance-none focus:outline-none focus:border-indigo-500"
+                                            style={{ backgroundImage: 'none' }}
+                                        >
+                                            {warehouses.map((w) => (
+                                                <option key={w.id} value={w.id}>{w.name}</option>
+                                            ))}
+                                        </select>
+                                        <ChevronDown size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                                    </div>
                                 </div>
 
                                 <div>
                                     <label className="block font-semibold text-slate-300 mb-1">إلى سيارة المندوب (المستقبل)</label>
-                                    <select
-                                        value={dispData.to_warehouse_id}
-                                        onChange={(e) => setDispData('to_warehouse_id', e.target.value)}
-                                        className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-indigo-500"
-                                    >
-                                        {vanWhs.map((w) => (
-                                            <option key={w.id} value={w.id}>{w.name} ({w.sales_rep?.name})</option>
-                                        ))}
-                                    </select>
+                                    <div className="relative">
+                                        <select
+                                            value={dispData.to_warehouse_id}
+                                            onChange={(e) => setDispData('to_warehouse_id', e.target.value)}
+                                            className="w-full bg-slate-950 border border-slate-700 rounded-xl pl-10 pr-3.5 py-2 text-white appearance-none focus:outline-none focus:border-indigo-500"
+                                            style={{ backgroundImage: 'none' }}
+                                        >
+                                            {vanWhs.map((w) => (
+                                                <option key={w.id} value={w.id}>{getVanLabel(w)}</option>
+                                            ))}
+                                        </select>
+                                        <ChevronDown size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                                    </div>
                                 </div>
                             </div>
 
@@ -268,27 +294,29 @@ export default function Index({ warehouses, sales_reps, products, recent_dispatc
                                 <div className="space-y-2">
                                     {dispData.items.map((item, index) => (
                                         <div key={index} className="p-3 rounded-2xl bg-slate-950 border border-slate-800 flex items-center gap-3">
-                                            <div className="flex-1">
+                                            <div className="flex-1 relative">
                                                 <select
                                                     value={item.product_id}
                                                     onChange={(e) => updateDispatchItem(index, 'product_id', e.target.value)}
-                                                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1.5 text-white"
+                                                    className="w-full bg-slate-900 border border-slate-700 rounded-xl pl-10 pr-3 py-1.5 text-white appearance-none focus:outline-none focus:border-indigo-500 text-xs"
+                                                    style={{ backgroundImage: 'none' }}
                                                 >
                                                     {products.map((p) => (
                                                         <option key={p.id} value={p.id}>
-                                                            {p.name} (رصيد المخزن: {p.stock_quantity})
+                                                            {p.name} (رصيد المخزن: {Math.round(p.stock_quantity ?? 0)})
                                                         </option>
                                                     ))}
                                                 </select>
+                                                <ChevronDown size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                                             </div>
 
                                             <div className="w-24">
                                                 <input
                                                     type="number"
-                                                    min="0.1"
-                                                    step="0.1"
+                                                    min="1"
+                                                    step="1"
                                                     value={item.quantity}
-                                                    onChange={(e) => updateDispatchItem(index, 'quantity', e.target.value)}
+                                                    onChange={(e) => updateDispatchItem(index, 'quantity', e.target.value ? parseInt(e.target.value, 10) || 0 : '')}
                                                     className="w-full bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1.5 text-white text-center font-bold"
                                                 />
                                             </div>
@@ -365,30 +393,38 @@ export default function Index({ warehouses, sales_reps, products, recent_dispatc
 
                             <div>
                                 <label className="block font-semibold text-slate-300 mb-1">النوع</label>
-                                <select
-                                    value={whData.type}
-                                    onChange={(e) => setWhData('type', e.target.value)}
-                                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white"
-                                >
-                                    <option value="van">سيارة توزيع مندوب (Van)</option>
-                                    <option value="main">مستودع فرعي ثابت</option>
-                                </select>
+                                <div className="relative">
+                                    <select
+                                        value={whData.type}
+                                        onChange={(e) => setWhData('type', e.target.value)}
+                                        className="w-full bg-slate-950 border border-slate-700 rounded-xl pl-10 pr-3.5 py-2 text-white appearance-none focus:outline-none focus:border-indigo-500"
+                                        style={{ backgroundImage: 'none' }}
+                                    >
+                                        <option value="van">سيارة توزيع مندوب (Van)</option>
+                                        <option value="main">مستودع فرعي ثابت</option>
+                                    </select>
+                                    <ChevronDown size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                                </div>
                             </div>
 
                             {whData.type === 'van' && (
                                 <>
                                     <div>
                                         <label className="block font-semibold text-slate-300 mb-1">المندوب المسؤول</label>
-                                        <select
-                                            value={whData.sales_rep_id}
-                                            onChange={(e) => setWhData('sales_rep_id', e.target.value)}
-                                            className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white"
-                                        >
-                                            <option value="">اختر مندوب</option>
-                                            {sales_reps.map((sr) => (
-                                                <option key={sr.id} value={sr.id}>{sr.name}</option>
-                                            ))}
-                                        </select>
+                                        <div className="relative">
+                                            <select
+                                                value={whData.sales_rep_id}
+                                                onChange={(e) => setWhData('sales_rep_id', e.target.value)}
+                                                className="w-full bg-slate-950 border border-slate-700 rounded-xl pl-10 pr-3.5 py-2 text-white appearance-none focus:outline-none focus:border-indigo-500"
+                                                style={{ backgroundImage: 'none' }}
+                                            >
+                                                <option value="">اختر مندوب</option>
+                                                {sales_reps.map((sr) => (
+                                                    <option key={sr.id} value={sr.id}>{sr.name}</option>
+                                                ))}
+                                            </select>
+                                            <ChevronDown size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                                        </div>
                                     </div>
 
                                     <div>

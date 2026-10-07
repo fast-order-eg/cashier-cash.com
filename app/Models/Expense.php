@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Expense extends Model
 {
@@ -17,11 +18,13 @@ class Expense extends Model
         'expense_date',
         'attachment_path',
         'notes',
+        'is_test',
     ];
 
     protected $casts = [
         'amount' => 'decimal:2',
         'expense_date' => 'date',
+        'is_test' => 'boolean',
     ];
 
     public function tenant(): BelongsTo
@@ -42,5 +45,10 @@ class Expense extends Model
     public function vanTrip(): BelongsTo
     {
         return $this->belongsTo(VanTrip::class, 'van_trip_id');
+    }
+
+    public function auditLogs(): HasMany
+    {
+        return $this->hasMany(ExpenseAuditLog::class, 'expense_id')->latest();
     }
 }

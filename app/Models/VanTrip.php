@@ -18,19 +18,30 @@ class VanTrip extends Model
         'end_odometer',
         'total_distance',
         'total_sales',
+        'cash_sales',
         'total_cash_collected',
+        'difference',
         'status', // open, closed
+        'settlement_status', // open, balanced, unsettled, settled_with_variance
+        'settlement_notes',
+        'settled_by_id',
+        'settled_at',
+        'is_test',
         'notes',
     ];
 
     protected $casts = [
         'start_time' => 'datetime',
         'end_time' => 'datetime',
+        'settled_at' => 'datetime',
         'start_odometer' => 'decimal:2',
         'end_odometer' => 'decimal:2',
         'total_distance' => 'decimal:2',
         'total_sales' => 'decimal:2',
+        'cash_sales' => 'decimal:2',
         'total_cash_collected' => 'decimal:2',
+        'difference' => 'decimal:2',
+        'is_test' => 'boolean',
     ];
 
     public function tenant(): BelongsTo
@@ -48,6 +59,11 @@ class VanTrip extends Model
         return $this->belongsTo(Warehouse::class);
     }
 
+    public function settledBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'settled_by_id');
+    }
+
     public function invoices(): HasMany
     {
         return $this->hasMany(Invoice::class, 'van_trip_id');
@@ -61,5 +77,10 @@ class VanTrip extends Model
     public function isOpen(): bool
     {
         return $this->status === 'open';
+    }
+
+    public function isSettled(): bool
+    {
+        return in_array($this->settlement_status, ['balanced', 'settled_with_variance']);
     }
 }

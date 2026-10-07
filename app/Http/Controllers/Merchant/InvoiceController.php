@@ -17,7 +17,8 @@ class InvoiceController extends Controller
 
         $query = Invoice::where('tenant_id', $tenant->id)
             ->with(['cashier', 'salesRep', 'items'])
-            ->latest();
+            ->orderByDesc('created_at')
+            ->orderByDesc('id');
 
         if ($request->filled('search')) {
             $s = $request->search;
@@ -40,13 +41,46 @@ class InvoiceController extends Controller
             $query->whereDate('created_at', '<=', $request->to_date);
         }
 
+        $selectedShift = null;
+        if ($request->filled('shift_id')) {
+            $selectedShift = \App\Models\CashierShift::with('cashier')
+                ->where('tenant_id', $tenant->id)
+                ->find($request->shift_id);
+
+            if ($selectedShift) {
+                $query->where(function ($q) use ($selectedShift) {
+                    $q->where('shift_id', $selectedShift->id);
+                    if ($selectedShift->closed_at) {
+                        $q->orWhere(function ($sub) use ($selectedShift) {
+                            $sub->whereNull('shift_id')
+                                ->where('cashier_id', $selectedShift->user_id)
+                                ->whereBetween('created_at', [$selectedShift->opened_at, $selectedShift->closed_at]);
+                        });
+                    } else {
+                        $q->orWhere(function ($sub) use ($selectedShift) {
+                            $sub->whereNull('shift_id')
+                                ->where('cashier_id', $selectedShift->user_id)
+                                ->where('created_at', '>=', $selectedShift->opened_at);
+                        });
+                    }
+                });
+            } else {
+                $query->where('shift_id', $request->shift_id);
+            }
+        }
+
+        if ($request->filled('cashier_id')) {
+            $query->where('cashier_id', $request->cashier_id);
+        }
+
         $totalSales = (clone $query)->sum('total_amount');
         $invoices = $query->paginate(20)->withQueryString();
 
         return Inertia::render('Merchant/Invoices/Index', [
             'invoices' => $invoices,
             'total_sales' => $totalSales,
-            'filters' => $request->only(['search', 'type', 'from_date', 'to_date']),
+            'selectedShift' => $selectedShift,
+            'filters' => $request->only(['search', 'type', 'from_date', 'to_date', 'shift_id', 'cashier_id']),
         ]);
     }
 

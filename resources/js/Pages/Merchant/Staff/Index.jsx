@@ -10,12 +10,16 @@ import {
     UserCheck, 
     Shield, 
     AlertCircle,
-    CheckCircle
+    CheckCircle,
+    ChevronDown,
+    Eye,
+    EyeOff
 } from 'lucide-react';
 
-export default function Index({ staff, maxAllowed, currentCount, canAdd }) {
+export default function Index({ staff, maxAllowed, currentCount, canAdd, ownerId }) {
     const [modalOpen, setModalOpen] = useState(false);
     const [editingStaff, setEditingStaff] = useState(null);
+    const [showPassword, setShowPassword] = useState(false);
 
     const { 
         data, 
@@ -37,6 +41,7 @@ export default function Index({ staff, maxAllowed, currentCount, canAdd }) {
     const openCreateModal = () => {
         setEditingStaff(null);
         reset();
+        setShowPassword(false);
         setModalOpen(true);
     };
 
@@ -50,17 +55,18 @@ export default function Index({ staff, maxAllowed, currentCount, canAdd }) {
             password: '',
             is_active: user.is_active,
         });
+        setShowPassword(false);
         setModalOpen(true);
     };
 
     const handleSubmit = (e) => {
         e.preventDefault();
         if (editingStaff) {
-            patch(route('admin.staff.update', editingStaff.id), {
+            patch(`/admin/staff/${editingStaff.id}`, {
                 onSuccess: () => setModalOpen(false),
             });
         } else {
-            post(route('admin.staff.store'), {
+            post('/admin/staff', {
                 onSuccess: () => setModalOpen(false),
             });
         }
@@ -68,16 +74,16 @@ export default function Index({ staff, maxAllowed, currentCount, canAdd }) {
 
     const handleDelete = (id) => {
         if (confirm('هل أنت متأكد من حذف هذا الموظف؟')) {
-            router.delete(route('admin.staff.destroy', id));
+            router.delete(`/admin/staff/${id}`);
         }
     };
 
     const roleName = (role) => {
         switch (role) {
-            case 'cashier': return 'كاشير نقطة بيع';
-            case 'sales_rep': return 'مندوب مبيعات وسيارات';
-            case 'accountant': return 'محاسب ومسؤول تقارير';
-            case 'admin': return 'مدير فرع';
+            case 'cashier': return 'كاشير';
+            case 'sales_rep': return 'مندوب مبيعات';
+            case 'accountant': return 'محاسب';
+            case 'admin': return 'مدير';
             default: return role;
         }
     };
@@ -150,47 +156,67 @@ export default function Index({ staff, maxAllowed, currentCount, canAdd }) {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-850">
-                                {staff.map((u) => (
-                                    <tr key={u.id} className="hover:bg-slate-850/40 transition">
-                                        <td className="p-4">
-                                            <div className="font-bold text-white text-sm">{u.name}</div>
-                                            <div className="text-[11px] text-slate-400">{u.email}</div>
-                                        </td>
-                                        <td className="p-4 text-slate-300 font-mono">{u.phone || 'غير مسجل'}</td>
-                                        <td className="p-4">
-                                            <span className={`px-2.5 py-1 rounded-lg font-semibold text-xs ${
-                                                u.role === 'cashier' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
-                                                u.role === 'sales_rep' ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20' :
-                                                'bg-amber-500/10 text-amber-400 border border-amber-500/20'
-                                            }`}>
-                                                {roleName(u.role)}
-                                            </span>
-                                        </td>
-                                        <td className="p-4">
-                                            {u.is_active ? (
-                                                <span className="text-emerald-400 font-medium">نشط</span>
-                                            ) : (
-                                                <span className="text-rose-400 font-medium">معطل</span>
-                                            )}
-                                        </td>
-                                        <td className="p-4 text-center">
-                                            <div className="flex items-center justify-center gap-1.5">
-                                                <button
-                                                    onClick={() => openEditModal(u)}
-                                                    className="p-1.5 rounded-lg bg-slate-800 hover:bg-indigo-600 text-slate-400 hover:text-white transition"
-                                                >
-                                                    <Edit size={14} />
-                                                </button>
-                                                <button
-                                                    onClick={() => handleDelete(u.id)}
-                                                    className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-600 text-slate-400 hover:text-white transition"
-                                                >
-                                                    <Trash2 size={14} />
-                                                </button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))}
+                                {staff.map((u) => {
+                                    const isOwner = u.id === ownerId;
+                                    return (
+                                        <tr key={u.id} className="hover:bg-slate-850/40 transition">
+                                            <td className="p-4">
+                                                <div className="font-bold text-white text-sm flex items-center gap-2">
+                                                    <span>{u.name}</span>
+                                                    {isOwner && (
+                                                        <span className="text-[10px] bg-purple-500/20 text-purple-400 border border-purple-500/30 px-2 py-0.5 rounded-full font-bold">
+                                                            المالك
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <div className="text-[11px] text-slate-400">{u.email}</div>
+                                            </td>
+                                            <td className="p-4 text-slate-300 font-mono">{u.phone || 'غير مسجل'}</td>
+                                            <td className="p-4">
+                                                {isOwner ? (
+                                                    <span className="px-2.5 py-1 rounded-lg font-semibold text-xs bg-purple-500/10 text-purple-400 border border-purple-500/20">
+                                                        مدير المتجر (المالك)
+                                                    </span>
+                                                ) : (
+                                                    <span className={`px-2.5 py-1 rounded-lg font-semibold text-xs ${
+                                                        u.role === 'cashier' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
+                                                        u.role === 'sales_rep' ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20' :
+                                                        'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                                                    }`}>
+                                                        {roleName(u.role)}
+                                                    </span>
+                                                )}
+                                            </td>
+                                            <td className="p-4">
+                                                {u.is_active ? (
+                                                    <span className="text-emerald-400 font-medium">نشط</span>
+                                                ) : (
+                                                    <span className="text-rose-400 font-medium">معطل</span>
+                                                )}
+                                            </td>
+                                            <td className="p-4 text-center">
+                                                <div className="flex items-center justify-center gap-1.5">
+                                                    <button
+                                                        onClick={() => openEditModal(u)}
+                                                        className="p-1.5 rounded-lg bg-slate-800 hover:bg-indigo-600 text-slate-400 hover:text-white transition cursor-pointer"
+                                                        title="تعديل البيانات"
+                                                    >
+                                                        <Edit size={14} />
+                                                    </button>
+                                                    {!isOwner && (
+                                                        <button
+                                                            onClick={() => handleDelete(u.id)}
+                                                            className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-600 text-slate-400 hover:text-white transition cursor-pointer"
+                                                            title="حذف الموظف"
+                                                        >
+                                                            <Trash2 size={14} />
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
                             </tbody>
                         </table>
                     </div>
@@ -252,16 +278,19 @@ export default function Index({ staff, maxAllowed, currentCount, canAdd }) {
 
                                 <div>
                                     <label className="block font-semibold text-slate-300 mb-1">الدور والصلاحية</label>
-                                    <select
-                                        value={data.role}
-                                        onChange={(e) => setData('role', e.target.value)}
-                                        className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white"
-                                    >
-                                        <option value="cashier">كاشير (شاشة POS فقط)</option>
-                                        <option value="sales_rep">مندوب مبيعات (سيارات الجملة)</option>
-                                        <option value="admin">مدير فرع</option>
-                                        <option value="accountant">محاسب</option>
-                                    </select>
+                                    <div className="relative">
+                                        <select
+                                            value={data.role}
+                                            onChange={(e) => setData('role', e.target.value)}
+                                            className="w-full bg-slate-950 border border-slate-700 rounded-xl pl-10 pr-3.5 py-2 text-white appearance-none focus:outline-none focus:border-indigo-500 cursor-pointer"
+                                            style={{ backgroundImage: 'none' }}
+                                        >
+                                            <option value="cashier">كاشير</option>
+                                            <option value="sales_rep">مندوب مبيعات</option>
+                                            <option value="admin">مدير</option>
+                                        </select>
+                                        <ChevronDown size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                                    </div>
                                 </div>
                             </div>
 
@@ -269,14 +298,24 @@ export default function Index({ staff, maxAllowed, currentCount, canAdd }) {
                                 <label className="block font-semibold text-slate-300 mb-1">
                                     {editingStaff ? 'كلمة المرور (اتركها فارغة إذا لم ترغب بالتغيير)' : 'كلمة المرور'}
                                 </label>
-                                <input
-                                    type="password"
-                                    required={!editingStaff}
-                                    value={data.password}
-                                    onChange={(e) => setData('password', e.target.value)}
-                                    placeholder="••••••••"
-                                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white"
-                                />
+                                <div className="relative">
+                                    <input
+                                        type={showPassword ? "text" : "password"}
+                                        required={!editingStaff}
+                                        value={data.password}
+                                        onChange={(e) => setData('password', e.target.value)}
+                                        placeholder="••••••••"
+                                        className="w-full bg-slate-950 border border-slate-700 rounded-xl pl-10 pr-3 py-2 text-white focus:outline-none focus:border-indigo-500"
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowPassword(!showPassword)}
+                                        className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition p-1"
+                                        title={showPassword ? "إخفاء كلمة المرور" : "إظهار كلمة المرور"}
+                                    >
+                                        {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                                    </button>
+                                </div>
                                 {errors.password && <p className="text-rose-400 text-[10px] mt-1">{errors.password}</p>}
                             </div>
 

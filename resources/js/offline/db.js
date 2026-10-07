@@ -43,23 +43,27 @@ export async function getProductByBarcodeOffline(barcode) {
  * البحث عن أصناف بالاسم أو القسم محلياً
  */
 export async function searchProductsOffline(query = '', categoryId = null) {
-    let collection = db.products.toCollection();
+    try {
+        let collection = db.products.toCollection();
+        let items = await collection.toArray();
 
-    let items = await collection.toArray();
+        if (categoryId) {
+            items = items.filter(p => Number(p.category_id) === Number(categoryId));
+        }
 
-    if (categoryId) {
-        items = items.filter(p => p.category_id === Number(categoryId));
+        if (query && query.trim() !== '') {
+            const q = query.toLowerCase().trim();
+            items = items.filter(p => 
+                (p.name && p.name.toLowerCase().includes(q)) || 
+                (p.barcode && String(p.barcode).includes(q))
+            );
+        }
+
+        return items;
+    } catch (error) {
+        console.error('searchProductsOffline failed:', error);
+        return [];
     }
-
-    if (query && query.trim() !== '') {
-        const q = query.toLowerCase().trim();
-        items = items.filter(p => 
-            (p.name && p.name.toLowerCase().includes(q)) || 
-            (p.barcode && p.barcode.includes(q))
-        );
-    }
-
-    return items;
 }
 
 /**

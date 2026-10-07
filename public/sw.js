@@ -1,4 +1,4 @@
-const CACHE_NAME = 'casher-pos-v1';
+const CACHE_NAME = 'casher-pos-v2';
 const ASSETS_TO_CACHE = [
     '/pos',
     '/build/manifest.json',
@@ -32,8 +32,25 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
     if (event.request.method !== 'GET') return;
 
+    let url;
+    try {
+        url = new URL(event.request.url);
+    } catch {
+        return;
+    }
+
+    // 1. لا تتدخل نهائياً في أي روابط خارج نفس الدومين (cross-origin / subdomains)
+    if (url.origin !== self.location.origin) {
+        return;
+    }
+
+    // 2. تفعيل الكاش فقط لمسارات نقطة البيع POS وملفات البناء الثابتة
+    if (!url.pathname.startsWith('/pos') && !url.pathname.startsWith('/build/')) {
+        return;
+    }
+
     // Do not cache API requests or webhooks
-    if (event.request.url.includes('/api/') || event.request.url.includes('/webhook/')) {
+    if (url.pathname.includes('/api/') || url.pathname.includes('/webhook/')) {
         return;
     }
 

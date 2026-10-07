@@ -156,7 +156,20 @@ return [
     |
     */
 
-    'domain' => env('SESSION_DOMAIN'),
+    'domain' => env('SESSION_DOMAIN') ?: (function () {
+        if (!app()->bound('request')) {
+            return null;
+        }
+        $host = request()->getHost();
+        if (!$host || $host === 'localhost' || $host === '127.0.0.1' || filter_var($host, FILTER_VALIDATE_IP)) {
+            return null;
+        }
+        $parts = explode('.', $host);
+        if (count($parts) >= 2) {
+            return '.' . implode('.', array_slice($parts, -2));
+        }
+        return null;
+    })(),
 
     /*
     |--------------------------------------------------------------------------

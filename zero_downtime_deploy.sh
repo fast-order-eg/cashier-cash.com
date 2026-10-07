@@ -4,7 +4,11 @@ set -e
 echo "🚀 Starting Zero-Downtime Deployment for Casher System..."
 
 # Configuration
-REPO_TOKEN=$1
+REPO_TOKEN="${1:-$(cat /home/cashier-cash.com/deploy/.github_token 2>/dev/null)}"
+if [ -z "$REPO_TOKEN" ]; then
+    echo "❌ Error: GitHub Token is missing! Please provide it as an argument or save in /home/cashier-cash.com/deploy/.github_token"
+    exit 1
+fi
 REPO_URL="https://x-access-token:${REPO_TOKEN}@github.com/fast-order-eg/cashier-cash.com.git"
 BASE_DIR="/home/cashier-cash.com/deploy"
 RELEASES_DIR="$BASE_DIR/releases"
@@ -65,6 +69,11 @@ php artisan event:cache
 
 echo "🔄 Swapping symlink for Zero-Downtime..."
 ln -nfs "$RELEASE_DIR" "$CURRENT_DIR"
+
+if [ ! -L "/home/cashier-cash.com/public_html" ]; then
+    rm -rf /home/cashier-cash.com/public_html
+    ln -s "$CURRENT_DIR" /home/cashier-cash.com/public_html
+fi
 
 echo "🔄 Restarting Queue Workers and PHP processes..."
 php artisan queue:restart || true

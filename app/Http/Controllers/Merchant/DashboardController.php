@@ -20,8 +20,9 @@ class DashboardController extends Controller
         $tenant = app(Tenant::class);
         $today = now()->toDateString();
 
-        // مبيعات اليوم
+        // مبيعات اليوم (استبعاد بيانات الاختبار)
         $todayInvoices = Invoice::where('tenant_id', $tenant->id)
+            ->where('is_test', false)
             ->whereDate('created_at', $today)
             ->where('status', 'completed')
             ->get();
@@ -30,16 +31,18 @@ class DashboardController extends Controller
         $todayCostTotal = $todayInvoices->sum('cost_total');
         $todayGrossProfit = $todaySalesTotal - $todayCostTotal;
 
-        // مصروفات اليوم
+        // مصروفات اليوم (استبعاد بيانات الاختبار)
         $todayExpenses = Expense::where('tenant_id', $tenant->id)
+            ->where('is_test', false)
             ->whereDate('expense_date', $today)
             ->sum('amount');
 
         // صافي ربح اليوم = مجمل الربح - المصروفات
         $todayNetProfit = $todayGrossProfit - $todayExpenses;
 
-        // مبيعات الشهر الحالي
+        // مبيعات الشهر الحالي (استبعاد بيانات الاختبار)
         $monthInvoices = Invoice::where('tenant_id', $tenant->id)
+            ->where('is_test', false)
             ->whereMonth('created_at', now()->month)
             ->whereYear('created_at', now()->year)
             ->where('status', 'completed')
@@ -47,6 +50,7 @@ class DashboardController extends Controller
 
         $monthSalesTotal = $monthInvoices->sum('total_amount');
         $monthExpenses = Expense::where('tenant_id', $tenant->id)
+            ->where('is_test', false)
             ->whereMonth('expense_date', now()->month)
             ->whereYear('expense_date', now()->year)
             ->sum('amount');
@@ -73,12 +77,35 @@ class DashboardController extends Controller
             ->with(['salesRep', 'warehouse'])
             ->get();
 
-        // أحدث الفواتير
+        // أحدث الفواتير (التشغيل الفعلي)
         $recentInvoices = Invoice::where('tenant_id', $tenant->id)
+            ->where('is_test', false)
             ->with(['cashier', 'salesRep'])
             ->latest()
             ->take(6)
             ->get();
+
+        // موظفو الكاشير والإدارة المتاحون بالمتجر لفتح شاشة البيع مع معرفة حالة الوردية
+        $activeShiftUserIds = CashierShift::where('tenant_id', $tenant->id)
+            ->where('status', 'open')
+            ->pluck('user_id')
+            ->toArray();
+
+        $cashiers = \App\Models\User::where('tenant_id', $tenant->id)
+            ->where('is_active', true)
+            ->whereIn('role', ['cashier', 'admin'])
+            ->select(['id', 'name', 'email', 'role'])
+            ->orderBy('name')
+            ->get()
+            ->map(function ($u) use ($activeShiftUserIds) {
+                return [
+                    'id' => $u->id,
+                    'name' => $u->name,
+                    'email' => $u->email,
+                    'role' => $u->role,
+                    'has_open_shift' => in_array($u->id, $activeShiftUserIds),
+                ];
+            });
 
         return Inertia::render('Merchant/Dashboard', [
             'stats' => [
@@ -94,6 +121,7 @@ class DashboardController extends Controller
             'active_shifts' => $activeShifts,
             'active_van_trips' => $activeVanTrips,
             'recent_invoices' => $recentInvoices,
+            'cashiers' => $cashiers,
         ]);
     }
 }
