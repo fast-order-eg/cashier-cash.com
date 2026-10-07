@@ -146,8 +146,14 @@ Route::domain('{tenant}.' . $baseDomain)->group(function () {
         return redirect()->away(\App\Http\Controllers\Auth\AuthenticatedSessionController::getCentralRegisterUrl($request));
     });
 
-    // Auth routes for store subdomain
-    require __DIR__.'/auth.php';
+    // إعادة توجيه مسار تسجيل الدخول إلى صفحة الدخول الموحدة
+    Route::get('/login', function () {
+        return redirect()->away(\App\Http\Controllers\Auth\AuthenticatedSessionController::getCentralLoginUrl());
+    });
+
+    // تسجيل الخروج الخاص بنطاق المتجر
+    Route::match(['get', 'post'], '/logout', [\App\Http\Controllers\Auth\AuthenticatedSessionController::class, 'destroy'])
+        ->name('tenant.logout');
 
     // مسارات المتجر المحمية (أدمن، كاشير، مندوب)
     Route::middleware(['web', 'auth', 'tenant', 'tenant.active'])->group(function () {
