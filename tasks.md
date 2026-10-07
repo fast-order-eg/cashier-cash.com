@@ -767,9 +767,20 @@
   - صفحة تسجيل متجر جديد `https://cashier-cash.com/register` تعمل بنجاح (HTTP 200 OK).
   - صفحة تسجيل الدخول الموحدة `https://app.cashier-cash.com/login` تعمل بنجاح (HTTP 200 OK).
   - نطاق المستأجر والكاشير `https://alamana.cashier-cash.com` والـ POS يعمل بسلاسة ويوجه لتسجيل الدخول للحماية (HTTP 302 -> 200).
+---
 
-
-
+## المرحلة 55: تفعيل صفحة الملف الشخصي للسوبر أدمن والمتاجر وإجبار نافذة اختيار الحساب في Google OAuth
+- [x] **حل مشكلة 404 في صفحة الملف الشخصي (Profile):**
+  - في `routes/web.php`: إضافة مسارات الملف الشخصي الموحدة (`profile.edit`, `profile.update`, `profile.destroy`) ضمن مجموعة `web` و `auth` العامة لتعمل بسلاسة على نطاق السوبر أدمن `app.cashier-cash.com` وكل نطاقات المتاجر.
+  - في `ProfileController.php`: إضافة حماية برمجية تمنع حذف حساب السوبر أدمن الرئيسي للمنصة نهائياً.
+  - التحقق من توافق صفحة `resources/js/Pages/Profile/Edit.jsx` وعرضها داخل `SuperAdminLayout` للسوبر أدمن أو `MerchantLayout` لأصحاب المتاجر.
+- [x] **إجبار ظهور شاشة اختيار الحساب والمتابعة في Google OAuth:**
+  - في `GoogleAuthController.php`: تمرير بارامتر `prompt => 'select_account consent'` في دالة `redirectToGoogle()` لإجبار جوجل دائماً على فتح شاشة اختيار حساب الجيميل وإظهار خطوات المتابعة والموافقة حتى لو كان المستخدم مسجلاً بنفس الحساب من قبل.
+  - تحسين توجيه الـ SSO في `handleGoogleCallback` ليشمل حسابات السوبر أدمن والمتاجر عبر توكن دخول آمن سريع (`sso-entry`).
+  - في `AuthenticatedSessionController.php`: تعديل استهلاك توكن الـ SSO ليعتمد على `Cache::get` مع مهلة دقيقتين بدلاً من `pull` لتفادي فقدان الجلسة عند تكرار طلبات المتصفح أو التأخير الشبكي.
+- [x] **بناء ونشر التحديثات على السيرفر بنظام Zero-Downtime:**
+  - رفع الكود إلى GitHub وتحديث الكاش والراوتات على السيرفر بنجاح تام.
+  - فحص الروابط الحية: `https://app.cashier-cash.com/profile` و `https://app.cashier-cash.com/auth/google` تعملان بنجاح.
 
 
 
