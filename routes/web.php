@@ -142,7 +142,9 @@ Route::domain('app.' . $baseDomain)->group(function () {
 | 3. نطاق المتاجر ({tenant}.casher.com)
 |--------------------------------------------------------------------------
 */
-Route::domain('{tenant}.' . $baseDomain)->group(function () {
+Route::domain('{tenant}.' . $baseDomain)
+    ->where(['tenant' => '^(?!app$|www$).*'])
+    ->group(function () {
     // إعادة توجيه مسار التسجيل إلى صفحة التسجيل الرسمية
     Route::get('/register', function (\Illuminate\Http\Request $request) {
         return redirect()->away(\App\Http\Controllers\Auth\AuthenticatedSessionController::getCentralRegisterUrl($request));
