@@ -143,7 +143,7 @@ Route::domain('app.' . $baseDomain)->group(function () {
 |--------------------------------------------------------------------------
 */
 Route::domain('{tenant}.' . $baseDomain)
-    ->where(['tenant' => '^(?!app$|www$).*'])
+    ->where(['tenant' => '(?!app\b|www\b)[a-zA-Z0-9-]+'])
     ->group(function () {
     // إعادة توجيه مسار التسجيل إلى صفحة التسجيل الرسمية
     Route::get('/register', function (\Illuminate\Http\Request $request) {
