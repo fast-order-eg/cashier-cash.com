@@ -55,6 +55,11 @@ Route::middleware(['web'])->get('/auth/sso-entry', [\App\Http\Controllers\Auth\A
 Route::middleware(['web'])->get('/admin/impersonate-entry', [\App\Http\Controllers\SuperAdmin\TenantController::class, 'impersonateEntry'])->name('merchant.impersonate.entry');
 Route::middleware(['web'])->get('/admin/impersonate-leave', [\App\Http\Controllers\SuperAdmin\TenantController::class, 'impersonateLeave'])->name('merchant.impersonate.leave');
 
+// مسارات المصادقة العامة (تدعم الدومين الأساسي ودومين app)
+Route::middleware(['web'])->group(function () {
+    require __DIR__.'/auth.php';
+});
+
 /*
 |--------------------------------------------------------------------------
 | 1. الموقع الرئيسي واللاندينج والتسجيل (casher.com)
@@ -76,9 +81,6 @@ Route::domain($baseDomain)->group(function () {
     // باي موب Callback & Webhook
     Route::get('/payment/paymob/callback', [\App\Http\Controllers\Merchant\SubscriptionController::class, 'paymentCallback'])->name('platform.payment.paymob.callback');
     Route::post('/webhook/paymob', [\App\Http\Controllers\Merchant\SubscriptionController::class, 'paymobWebhook'])->name('platform.webhook.paymob');
-
-    // Auth Routes للموقع الرئيسي
-    require __DIR__.'/auth.php';
 
     // إعادة توجيه آمنة لمنع خطأ 404 إذا تم طلب لوحة التحكم أو الكاشير على الدومين الرئيسي
     Route::get('/admin/{any?}', function () {
