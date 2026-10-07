@@ -45,6 +45,12 @@ class ProfileController extends Controller
      */
     public function destroy(Request $request): RedirectResponse
     {
+        $user = $request->user();
+
+        if ($user && $user->isSuperAdmin()) {
+            return back()->withErrors(['user' => 'لا يمكن حذف حساب السوبر أدمن الرئيسي للمنصة.']);
+        }
+
         $request->validate([
             'password' => ['required', 'current_password'],
         ]);

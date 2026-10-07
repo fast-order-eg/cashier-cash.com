@@ -60,6 +60,13 @@ Route::middleware(['web'])->group(function () {
     require __DIR__.'/auth.php';
 });
 
+// مسارات الملف الشخصي الموحدة (للسوبر أدمن وكل مستخدمي المتاجر)
+Route::middleware(['web', 'auth'])->group(function () {
+    Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
+    Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
+    Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+});
+
 /*
 |--------------------------------------------------------------------------
 | 1. الموقع الرئيسي واللاندينج والتسجيل (casher.com)

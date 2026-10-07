@@ -43,7 +43,11 @@ class GoogleAuthController extends Controller
      */
     public function redirectToGoogle(): RedirectResponse
     {
-        return $this->getGoogleDriver()->redirect();
+        return $this->getGoogleDriver()
+            ->with([
+                'prompt' => 'select_account consent',
+            ])
+            ->redirect();
     }
 
     /**
@@ -143,8 +147,8 @@ class GoogleAuthController extends Controller
             // 4. تحديد وجهة المستخدم بدقة وتوليد توكن الـ SSO
             $targetUrl = AuthenticatedSessionController::getDashboardUrl($user);
 
-            // لو الوجهة نقل إلى نطاق فرعي عبر SSO
-            if (!$user->isSuperAdmin() && $user->tenant && str_contains($targetUrl, '/auth/sso-entry')) {
+            // لو الوجهة نقل إلى نطاق آخر عبر SSO
+            if (str_contains($targetUrl, '/auth/sso-entry')) {
                 return redirect()->away($targetUrl);
             }
 

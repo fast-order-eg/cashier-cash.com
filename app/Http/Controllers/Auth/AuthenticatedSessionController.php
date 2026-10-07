@@ -246,7 +246,14 @@ class AuthenticatedSessionController extends Controller
             if ($host === "app.{$baseDomain}" || str_starts_with($host, 'app.')) {
                 return '/admin/dashboard';
             }
-            return "{$scheme}://app.{$baseDomain}{$portStr}/admin/dashboard";
+
+            $ssoToken = \Illuminate\Support\Str::random(64);
+            Cache::put('sso_token_' . $ssoToken, [
+                'user_id' => $user->id,
+                'target' => '/admin/dashboard',
+            ], now()->addMinutes(2));
+
+            return "{$scheme}://app.{$baseDomain}{$portStr}/auth/sso-entry?token={$ssoToken}";
         }
 
         // 2. مستخدم متجر (تاجر، كاشير، مندوب)
@@ -270,7 +277,7 @@ class AuthenticatedSessionController extends Controller
             Cache::put('sso_token_' . $ssoToken, [
                 'user_id' => $user->id,
                 'target' => $targetPath,
-            ], now()->addSeconds(30));
+            ], now()->addMinutes(2));
 
             return "{$scheme}://{$tenant->slug}.{$baseDomain}{$portStr}/auth/sso-entry?token={$ssoToken}";
         }
@@ -285,7 +292,7 @@ class AuthenticatedSessionController extends Controller
     public function ssoEntry(Request $request): SymfonyResponse
     {
         $token = $request->query('token');
-        $data = $token ? Cache::pull('sso_token_' . $token) : null;
+        $data = $token ? Cache::get('sso_token_' . $token) : null;
 
         if (!$data) {
             return redirect()->away(self::getCentralLoginUrl($request));
@@ -293,11 +300,15 @@ class AuthenticatedSessionController extends Controller
 
         $user = \App\Models\User::find($data['user_id']);
         if (!$user) {
+            Cache::forget('sso_token_' . $token);
             return redirect()->away(self::getCentralLoginUrl($request));
         }
 
         Auth::login($user, true);
         $request->session()->regenerate();
+
+        // تنظيف التوكن بعد نجاح تسجيل الدخول
+        Cache::forget('sso_token_' . $token);
 
         $targetPath = $data['target'] ?? '/admin/dashboard';
         return redirect()->to($targetPath);
