@@ -791,6 +791,23 @@
 - [x] **تحديد الحل الجذري التلقائي (Wildcard SSL):**
   - تجهيز إعدادات الـ Wildcard SSL (`*.cashier-cash.com`) عبر تحديث DNS TXT أو Cloudflare لتغطية كل المتاجر المستقبلية تلقائياً بنسبة 100%.
 
+---
+
+## المرحلة 57: اكتمال نقل وإعداد Cloudflare وتفعيل Wildcard SSL لجميع المتاجر الحالية والمستقبلية
+- [x] **ربط وإعداد سجلات الـ DNS على Cloudflare بنجاح:**
+  - إضافة سجل A للنطاق الرئيسي `cashier-cash.com` يشير لـ `194.164.77.93` مع تفعيل الـ Proxy.
+  - إضافة سجل A وايلدكارد `*` يشير لـ `194.164.77.93` مع تفعيل الـ Proxy لتغطية كل المتاجر اللانهائية (`*.cashier-cash.com`).
+  - إضافة سجل CNAME لـ `www` يشير إلى `cashier-cash.com` مع تفعيل الـ Proxy.
+- [x] **ضبط وضع تشفير SSL/TLS في Cloudflare:**
+  - تفعيل وضع **Full** لضمان تشفير البيانات بين المتصفح وكلاود فلاير، ومن كلاود فلاير إلى سيرفر OpenLiteSpeed.
+- [x] **تحديث الـ Nameservers في Hostinger:**
+  - تغيير الـ Nameservers رسمياً إلى `gina.ns.cloudflare.com` و `razvan.ns.cloudflare.com`.
+- [x] **فحص واختبار الـ DNS والشهادة الحية (Live Edge Verification):**
+  - فحص انتشار الـ DNS على خوادم Cloudflare (1.1.1.1) وجوجل (8.8.8.8) بنجاح وعودتها بعناوين بروكسي Cloudflare.
+  - اختبار النطاقات الفرعية (`teststore.cashier-cash.com`) وتأكيد استجابتها برمز `HTTP 302` وتحويلها لصفحة الدخول المشفرة عبر HTTPS بشهادة Universal SSL من كلاود فلاير دون أي أخطاء شهادات.
+  - حل مشكلة `NET::ERR_CERT_COMMON_NAME_INVALID` نهائياً وبشكل دائم لجميع التجار الحاليين والجدد بدون أي حاجة لإصدار شهادات يدوية مستقبلاً.
+
+
 
 
 
