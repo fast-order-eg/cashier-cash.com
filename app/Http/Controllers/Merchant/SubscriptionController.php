@@ -14,6 +14,7 @@ use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -448,33 +449,66 @@ class SubscriptionController extends Controller
      */
     public function paymentCallback(Request $request): RedirectResponse
     {
-        // 1. معالجة الرد الوارد من بوابة كاشير (Kashier)
-        if ($request->has('paymentStatus')) {
-            $paymentStatus = strtoupper($request->query('paymentStatus', ''));
-            $orderId = $request->query('orderId') ?? $request->query('merchantOrderId');
+        $all = $request->all();
+        \Illuminate\Support\Facades\Log::info('Subscription Payment Callback received:', $all);
 
-            if ($orderId) {
-                $transaction = PaymentTransaction::where('order_reference', $orderId)->first();
-                if ($transaction) {
-                    if ($paymentStatus === 'SUCCESS') {
-                        $this->activateTransaction($transaction, 'kashier', $request->query('transactionId'));
-                        return redirect()->route('admin.subscriptions.index')->with('success', 'تم السداد بنجاح عبر كاشير وتفعيل طلبك فوراً!');
-                    } else {
-                        return redirect()->route('admin.subscriptions.index')->with('error', 'تم إلغاء عملية الدفع عبر كاشير أو لم تكتمل.');
+        // 1. معالجة الرد الوارد من بوابة كاشير (Kashier)
+        $paymentStatus = strtoupper((string) ($request->input('paymentStatus') ?? $request->query('paymentStatus') ?? ''));
+        $orderId = $request->input('orderId') 
+            ?? $request->query('orderId') 
+            ?? $request->input('merchantOrderId') 
+            ?? $request->query('merchantOrderId');
+        $transactionId = $request->input('transactionId') ?? $request->query('transactionId');
+
+        if (!empty($orderId)) {
+            $transaction = PaymentTransaction::where('order_reference', $orderId)->first();
+            if ($transaction) {
+                $isSuccess = in_array($paymentStatus, ['SUCCESS', 'CAPTURED', 'PAID']);
+                
+                if ($isSuccess) {
+                    if ($transaction->status !== 'paid') {
+                        $this->activateTransaction($transaction, 'kashier', $transactionId);
                     }
+
+                    // تسجيل الدخول لمالك المتجر تلقائياً في حال انقطعت الجلسة عند العودة من كاشير
+                    if (!Auth::check() && $transaction->tenant && $transaction->tenant->owner) {
+                        Auth::login($transaction->tenant->owner);
+                    }
+
+                    return redirect()->route('admin.subscriptions.index')->with('success', 'تم السداد بنجاح عبر كاشير وتفعيل طلبك فوراً!');
+                } elseif (!empty($paymentStatus)) {
+                    if (!Auth::check() && $transaction->tenant && $transaction->tenant->owner) {
+                        Auth::login($transaction->tenant->owner);
+                    }
+                    return redirect()->route('admin.subscriptions.index')->with('error', 'تم إلغاء عملية الدفع عبر كاشير أو لم تكتمل.');
                 }
             }
         }
 
         // 2. معالجة الرد الوارد من بوابة Paymob
-        $success = $request->query('success');
-        $orderReference = $request->query('merchant_order_id');
+        $paymobSuccess = $request->input('success') ?? $request->query('success');
+        $paymobOrderRef = $request->input('merchant_order_id') ?? $request->query('merchant_order_id');
+        $paymobTxId = $request->input('id') ?? $request->query('id');
 
-        if ($orderReference) {
-            $transaction = PaymentTransaction::where('order_reference', $orderReference)->first();
-            if ($transaction && ($success === 'true' || $success === true || $success == 1)) {
-                $this->activateTransaction($transaction, 'paymob', $request->query('id'));
-                return redirect()->route('admin.subscriptions.index')->with('success', 'تم السداد بنجاح وتفعيل الاشتراك ومقاعد الموظفين!');
+        if ($paymobOrderRef) {
+            $transaction = PaymentTransaction::where('order_reference', $paymobOrderRef)->first();
+            if ($transaction) {
+                if ($paymobSuccess === 'true' || $paymobSuccess === true || $paymobSuccess == 1) {
+                    if ($transaction->status !== 'paid') {
+                        $this->activateTransaction($transaction, 'paymob', $paymobTxId);
+                    }
+
+                    if (!Auth::check() && $transaction->tenant && $transaction->tenant->owner) {
+                        Auth::login($transaction->tenant->owner);
+                    }
+
+                    return redirect()->route('admin.subscriptions.index')->with('success', 'تم السداد بنجاح وتفعيل الاشتراك ومقاعد الموظفين!');
+                } else {
+                    if (!Auth::check() && $transaction->tenant && $transaction->tenant->owner) {
+                        Auth::login($transaction->tenant->owner);
+                    }
+                    return redirect()->route('admin.subscriptions.index')->with('error', 'لم تكتمل عملية الدفع عبر Paymob.');
+                }
             }
         }
 
@@ -486,20 +520,27 @@ class SubscriptionController extends Controller
      */
     public function kashierWebhook(Request $request, KashierService $kashierService): JsonResponse
     {
-        $data = $request->all();
-        $signature = $request->header('x-kashier-signature') ?? $request->input('signature');
+        $payload = $request->all();
+        $data = $payload['data'] ?? $payload;
+        $signature = $request->header('x-kashier-signature') ?? $payload['signature'] ?? null;
 
         if (!empty($signature) && !$kashierService->validateWebhookSignature($data, $signature)) {
             return response()->json(['message' => 'Invalid Kashier signature'], 400);
         }
 
-        $orderId = $data['orderId'] ?? $data['merchantOrderId'] ?? null;
-        $status = strtoupper($data['paymentStatus'] ?? $data['status'] ?? '');
+        $orderId = $data['orderId'] 
+            ?? $data['merchantOrderId'] 
+            ?? $payload['orderId'] 
+            ?? $payload['merchantOrderId'] 
+            ?? null;
+            
+        $status = strtoupper((string) ($data['paymentStatus'] ?? $data['status'] ?? $payload['paymentStatus'] ?? $payload['status'] ?? ''));
 
-        if ($orderId && $status === 'SUCCESS') {
+        if ($orderId && in_array($status, ['SUCCESS', 'CAPTURED', 'PAID'])) {
             $transaction = PaymentTransaction::where('order_reference', $orderId)->first();
             if ($transaction && $transaction->status !== 'paid') {
-                $this->activateTransaction($transaction, 'kashier', $data['transactionId'] ?? null);
+                $txId = $data['kashierTransactionId'] ?? $data['transactionId'] ?? $payload['transactionId'] ?? null;
+                $this->activateTransaction($transaction, 'kashier', $txId);
             }
         }
 
@@ -533,10 +574,14 @@ class SubscriptionController extends Controller
     }
 
     /**
-     * تفعيل المعاملة وتحديث بيانات المتجر والاشتراك
+     * تفعيل المعاملة وتحديث بيانات المتجر والاشتراك (بشكل Idempotent آمن لا يتكرر)
      */
     public function activateTransaction(PaymentTransaction $transaction, string $method, ?string $reference = null): void
     {
+        if ($transaction->status === 'paid') {
+            return;
+        }
+
         $tenant = $transaction->tenant;
         $sub = $transaction->subscription ?: $tenant->currentSubscription;
 

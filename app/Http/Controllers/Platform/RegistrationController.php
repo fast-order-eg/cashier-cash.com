@@ -154,55 +154,84 @@ class RegistrationController extends Controller
 
     public function kashierCallback(Request $request)
     {
-        $orderId = $request->query('orderId');
-        $paymentStatus = $request->query('paymentStatus'); // SUCCESS or FAILED
-        $signature = $request->query('signature');
+        $orderId = $request->input('orderId', $request->query('orderId', $request->input('merchantOrderId', $request->query('merchantOrderId'))));
+        $paymentStatus = strtoupper((string) ($request->input('paymentStatus', $request->query('paymentStatus', ''))));
+        $transactionId = $request->input('transactionId', $request->query('transactionId'));
+        $signature = $request->input('signature', $request->query('signature'));
 
-        $transaction = KashierTransaction::where('kashier_order_id', $orderId)->firstOrFail();
-        $subscription = $transaction->subscription;
-        $tenant = $transaction->tenant;
+        $isSuccess = in_array($paymentStatus, ['SUCCESS', 'CAPTURED', 'PAID']);
 
-        if (strtoupper($paymentStatus) === 'SUCCESS') {
-            $isYearly = $subscription->billing_cycle === 'yearly';
-            $durationMonths = $isYearly ? 12 : 1;
+        // 1. فحص معاملات المتاجر المشتركة (تجديد، إضافة موظفين، ترقية)
+        $payTx = \App\Models\PaymentTransaction::where('order_reference', $orderId)->first();
+        if ($payTx) {
+            if ($isSuccess) {
+                if ($payTx->status !== 'paid') {
+                    app(\App\Http\Controllers\Merchant\SubscriptionController::class)->activateTransaction(
+                        $payTx,
+                        'kashier',
+                        $transactionId
+                    );
+                }
 
-            $subscription->update([
-                'status' => 'active',
-                'starts_at' => now(),
-                'ends_at' => now()->addMonths($durationMonths),
-            ]);
+                if (!Auth::check() && $payTx->tenant && $payTx->tenant->owner) {
+                    Auth::login($payTx->tenant->owner);
+                }
 
-            $tenant->update([
-                'subscription_status' => 'active',
-                'subscription_ends_at' => now()->addMonths($durationMonths),
-                'is_active' => true,
-            ]);
-
-            $transaction->update([
-                'status' => 'SUCCESS',
-                'transaction_id' => $request->query('transactionId'),
-                'payment_method' => $request->query('cardBrand') ?? 'card',
-                'payload' => array_merge($transaction->payload ?? [], $request->all()),
-            ]);
-
-            // تسجيل الدخول لمالك المتجر وتوجيهه لمحلّه
-            Auth::login($tenant->owner);
-
-            $host = request()->getHost();
-            $baseDomain = parse_url(config('app.url'), PHP_URL_HOST);
-            $storeUrl = request()->getScheme() . '://' . $tenant->slug . '.' . $baseDomain . '/admin/dashboard';
-
-            return Inertia::render('Platform/PaymentSuccess', [
-                'tenant' => $tenant,
-                'storeUrl' => $storeUrl,
-                'subscription' => $subscription,
-            ]);
+                $baseDomain = AuthenticatedSessionController::getCentralBaseDomain($request);
+                $storeUrl = $request->getScheme() . '://' . $payTx->tenant->slug . '.' . $baseDomain . '/admin/subscriptions';
+                return redirect()->away($storeUrl)->with('success', 'تم السداد وتفعيل باقتك بنجاح!');
+            }
         }
 
-        $transaction->update([
-            'status' => 'FAILED',
-            'payload' => array_merge($transaction->payload ?? [], $request->all()),
-        ]);
+        // 2. فحص معاملات تسجيل المتجر الجديد
+        $transaction = KashierTransaction::where('kashier_order_id', $orderId)->first();
+        if ($transaction) {
+            $subscription = $transaction->subscription;
+            $tenant = $transaction->tenant;
+
+            if ($isSuccess) {
+                $isYearly = $subscription->billing_cycle === 'yearly';
+                $durationMonths = $isYearly ? 12 : 1;
+
+                $subscription->update([
+                    'status' => 'active',
+                    'starts_at' => now(),
+                    'ends_at' => now()->addMonths($durationMonths),
+                ]);
+
+                $tenant->update([
+                    'subscription_status' => 'active',
+                    'subscription_ends_at' => now()->addMonths($durationMonths),
+                    'is_active' => true,
+                ]);
+
+                $transaction->update([
+                    'status' => 'SUCCESS',
+                    'transaction_id' => $transactionId,
+                    'payment_method' => $request->input('cardBrand', $request->query('cardBrand', 'card')),
+                    'payload' => array_merge($transaction->payload ?? [], $request->all()),
+                ]);
+
+                // تسجيل الدخول لمالك المتجر وتوجيهه لمحلّه
+                if ($tenant->owner) {
+                    Auth::login($tenant->owner);
+                }
+
+                $baseDomain = AuthenticatedSessionController::getCentralBaseDomain($request);
+                $storeUrl = $request->getScheme() . '://' . $tenant->slug . '.' . $baseDomain . '/admin/dashboard';
+
+                return Inertia::render('Platform/PaymentSuccess', [
+                    'tenant' => $tenant,
+                    'storeUrl' => $storeUrl,
+                    'subscription' => $subscription,
+                ]);
+            }
+
+            $transaction->update([
+                'status' => 'FAILED',
+                'payload' => array_merge($transaction->payload ?? [], $request->all()),
+            ]);
+        }
 
         return redirect()->route('platform.pricing')->with('error', 'فشلت عملية الدفع، يرجى المحاولة مرة أخرى.');
     }
@@ -210,17 +239,35 @@ class RegistrationController extends Controller
     public function kashierWebhook(Request $request): JsonResponse
     {
         $payload = $request->all();
-        $data = $payload['data'] ?? [];
-        $signature = $payload['signature'] ?? '';
+        $data = $payload['data'] ?? $payload;
+        $signature = $request->header('x-kashier-signature') ?? $payload['signature'] ?? null;
 
         if (!empty($signature) && !$this->kashierService->validateWebhookSignature($data, $signature)) {
             return response()->json(['error' => 'Invalid signature'], 400);
         }
 
-        $orderId = $data['merchantOrderId'] ?? null;
-        $status = $data['status'] ?? null;
+        $orderId = $data['merchantOrderId'] 
+            ?? $data['orderId'] 
+            ?? $payload['merchantOrderId'] 
+            ?? $payload['orderId'] 
+            ?? null;
+            
+        $status = strtoupper((string) ($data['status'] ?? $data['paymentStatus'] ?? $payload['status'] ?? $payload['paymentStatus'] ?? ''));
+        $isSuccess = in_array($status, ['SUCCESS', 'CAPTURED', 'PAID']);
+        $txId = $data['kashierTransactionId'] ?? $data['transactionId'] ?? $payload['transactionId'] ?? null;
 
-        if ($orderId && strtoupper($status) === 'SUCCESS') {
+        if ($orderId && $isSuccess) {
+            // أولاً: تفعيل معاملات المتاجر المشتركة (تجديد، إضافة موظفين، ترقية)
+            $payTx = \App\Models\PaymentTransaction::where('order_reference', $orderId)->first();
+            if ($payTx && $payTx->status !== 'paid') {
+                app(\App\Http\Controllers\Merchant\SubscriptionController::class)->activateTransaction(
+                    $payTx,
+                    'kashier',
+                    $txId
+                );
+            }
+
+            // ثانياً: تفعيل اشتراك متجر مسجل جديد
             $transaction = KashierTransaction::where('kashier_order_id', $orderId)->first();
             if ($transaction && $transaction->status !== 'SUCCESS') {
                 $subscription = $transaction->subscription;
@@ -243,19 +290,9 @@ class RegistrationController extends Controller
 
                 $transaction->update([
                     'status' => 'SUCCESS',
-                    'transaction_id' => $data['kashierTransactionId'] ?? null,
+                    'transaction_id' => $txId,
                     'payload' => $payload,
                 ]);
-            }
-
-            // تفعيل معاملات المتاجر المشتركة (تجديد، إضافة موظفين، ترقية)
-            $payTx = \App\Models\PaymentTransaction::where('order_reference', $orderId)->first();
-            if ($payTx && $payTx->status !== 'paid') {
-                app(\App\Http\Controllers\Merchant\SubscriptionController::class)->activateTransaction(
-                    $payTx,
-                    'kashier',
-                    $data['kashierTransactionId'] ?? ($data['transactionId'] ?? null)
-                );
             }
         }
 

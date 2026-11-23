@@ -82,11 +82,11 @@ Route::domain($baseDomain)->group(function () {
     Route::get('/register/check-slug', [RegistrationController::class, 'checkSlug'])->name('platform.register.check-slug');
 
     // كاشير Callback & Webhook
-    Route::get('/payment/callback', [RegistrationController::class, 'kashierCallback'])->name('platform.payment.callback');
+    Route::match(['get', 'post'], '/payment/callback', [RegistrationController::class, 'kashierCallback'])->name('platform.payment.callback');
     Route::post('/webhook/kashier', [RegistrationController::class, 'kashierWebhook'])->name('platform.webhook.kashier');
 
     // باي موب Callback & Webhook
-    Route::get('/payment/paymob/callback', [\App\Http\Controllers\Merchant\SubscriptionController::class, 'paymentCallback'])->name('platform.payment.paymob.callback');
+    Route::match(['get', 'post'], '/payment/paymob/callback', [\App\Http\Controllers\Merchant\SubscriptionController::class, 'paymentCallback'])->name('platform.payment.paymob.callback');
     Route::post('/webhook/paymob', [\App\Http\Controllers\Merchant\SubscriptionController::class, 'paymobWebhook'])->name('platform.webhook.paymob');
 
     // إعادة توجيه آمنة لمنع خطأ 404 إذا تم طلب لوحة التحكم أو الكاشير على الدومين الرئيسي
@@ -169,6 +169,11 @@ Route::domain('{tenant}.' . $baseDomain)
     Route::match(['get', 'post'], '/logout', [\App\Http\Controllers\Auth\AuthenticatedSessionController::class, 'destroy'])
         ->name('tenant.logout');
 
+    // مسار استلام نتيجة الدفع من بوابات الدفع (كاشير / باي موب) - عام بدون شرط auth لضمان تفعيل المعاملة بعد إعادة توجيه المتصفح
+    Route::match(['get', 'post'], '/admin/subscriptions/payment/callback', [\App\Http\Controllers\Merchant\SubscriptionController::class, 'paymentCallback'])
+        ->middleware(['web', 'tenant'])
+        ->name('admin.subscriptions.payment.callback');
+
     // مسارات المتجر المحمية (أدمن، كاشير، مندوب)
     Route::middleware(['web', 'auth', 'tenant', 'tenant.active'])->group(function () {
         // لوحة تحكم الأدمن والتقارير
@@ -210,7 +215,6 @@ Route::domain('{tenant}.' . $baseDomain)
             Route::post('subscriptions/change-plan', [\App\Http\Controllers\Merchant\SubscriptionController::class, 'changePlan'])->name('admin.subscriptions.change-plan');
             Route::get('subscriptions/checkout/{order}', [\App\Http\Controllers\Merchant\SubscriptionController::class, 'checkout'])->name('admin.subscriptions.checkout');
             Route::post('subscriptions/pay/{order}', [\App\Http\Controllers\Merchant\SubscriptionController::class, 'processPayment'])->name('admin.subscriptions.pay');
-            Route::get('subscriptions/payment/callback', [\App\Http\Controllers\Merchant\SubscriptionController::class, 'paymentCallback'])->name('admin.subscriptions.payment.callback');
 
             // إعدادات المتجر
             Route::get('settings', [\App\Http\Controllers\Merchant\SettingController::class, 'index'])->name('admin.settings.index');

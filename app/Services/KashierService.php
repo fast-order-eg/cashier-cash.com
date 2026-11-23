@@ -58,6 +58,22 @@ class KashierService
         return hash_hmac('sha256', $path, $this->secretKey);
     }
 
+    public function getWebhookUrl(): string
+    {
+        $appUrl = config('app.url', 'https://cashier-cash.com');
+        $parsed = parse_url($appUrl);
+        $scheme = $parsed['scheme'] ?? 'https';
+        $host = $parsed['host'] ?? 'cashier-cash.com';
+        
+        if (str_starts_with($host, 'app.')) {
+            $host = substr($host, 4);
+        }
+        
+        $port = isset($parsed['port']) && !in_array($parsed['port'], [80, 443]) ? ':' . $parsed['port'] : '';
+
+        return "{$scheme}://{$host}{$port}/webhook/kashier";
+    }
+
     /**
      * إنشاء رابط صفحة الدفع المباشر لـ Kashier
      */
@@ -70,8 +86,9 @@ class KashierService
     ): string {
         $hash = $this->generateHash($orderId, $amount, $currency);
         $encodedCallback = urlencode($callbackUrl);
+        $encodedWebhook = urlencode($this->getWebhookUrl());
         
-        return "{$this->baseUrl}/?merchantId={$this->merchantId}&orderId={$orderId}&amount={$amount}&currency={$currency}&hash={$hash}&merchantRedirect={$encodedCallback}&mode={$this->mode}&display={$display}&allowedMethods=card,wallet&brandColor=%234F46E5";
+        return "{$this->baseUrl}/?merchantId={$this->merchantId}&orderId={$orderId}&amount={$amount}&currency={$currency}&hash={$hash}&merchantRedirect={$encodedCallback}&serverWebhook={$encodedWebhook}&mode={$this->mode}&display={$display}&allowedMethods=card,wallet&brandColor=%234F46E5";
     }
 
     /**
@@ -98,6 +115,7 @@ class KashierService
             'order' => $orderId,
             'merchantId' => $this->merchantId,
             'merchantRedirect' => $callbackUrl,
+            'serverWebhook' => $this->getWebhookUrl(),
             'display' => 'ar',
             'type' => 'one-time',
             'allowedMethods' => 'card,wallet',

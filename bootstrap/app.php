@@ -18,6 +18,18 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->validateCsrfTokens(except: [
             'webhook/*',
             '*/webhook/*',
+            'payment/*',
+            '*/payment/*',
+            'subscriptions/payment/*',
+            '*/subscriptions/payment/*',
+            'admin/subscriptions/payment/*',
+            '*/admin/subscriptions/payment/*',
+            'payment/callback',
+            '*/payment/callback',
+            'subscriptions/payment/callback',
+            '*/subscriptions/payment/callback',
+            'admin/subscriptions/payment/callback',
+            '*/admin/subscriptions/payment/callback',
         ]);
 
         $middleware->web(append: [
