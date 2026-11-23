@@ -25,6 +25,7 @@ export default function SuperAdminLayout({ children, title = 'لوحة تحكم 
     const navItems = [
         { name: 'الرئيسية والإحصائيات', href: '/admin/dashboard', icon: LayoutDashboard },
         { name: 'إدارة المتاجر والعملاء', href: '/admin/tenants', icon: Store },
+        { name: 'سجل العمليات والمدفوعات', href: '/admin/transactions', icon: DollarSign },
         { name: 'باقات الاشتراك والأسعار', href: '/admin/plans', icon: CreditCard },
         { name: 'إعدادات بوابات الدفع', href: '/admin/payment-settings', icon: Settings },
     ];

@@ -11,7 +11,10 @@ import {
     CheckCircle,
     Clock,
     AlertCircle,
-    UserCheck
+    UserCheck,
+    CreditCard,
+    ShieldCheck,
+    Sparkles
 } from 'lucide-react';
 import { formatNumber, formatCurrency, formatDate, formatDateTime } from '@/utils/formatters';
 
@@ -189,6 +192,118 @@ export default function Dashboard({ stats, recent_tenants, recent_transactions, 
                             ))}
                         </div>
                     </div>
+                </div>
+
+                {/* Recent Payments & Kashier Transactions Table */}
+                <div className="bg-slate-800 border border-slate-700/80 rounded-2xl p-6 shadow-xl space-y-5">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-700/80 pb-4">
+                        <div>
+                            <div className="flex items-center gap-2">
+                                <div className="w-8 h-8 rounded-xl bg-emerald-500/15 text-emerald-400 flex items-center justify-center">
+                                    <DollarSign size={18} />
+                                </div>
+                                <h2 className="text-lg font-bold text-white">سجل عمليات الدفع والشحن الإلكتروني (كاشير)</h2>
+                                <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-indigo-500/15 text-indigo-400 border border-indigo-500/30 font-bold">
+                                    مباشر من التجار
+                                </span>
+                            </div>
+                            <p className="text-xs text-slate-400 mt-1">
+                                متابعة تحويلات التجار واشتراكات المتاجر وسداد المقاعد الإضافية عبر بوابة كاشير (Kashier)
+                            </p>
+                        </div>
+                        <Link 
+                            href="/admin/transactions" 
+                            className="text-xs font-semibold px-4 py-2 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 flex items-center gap-1.5 transition self-start sm:self-auto"
+                        >
+                            <span>عرض كل العمليات بالتفصيل</span>
+                            <ArrowUpRight size={14} />
+                        </Link>
+                    </div>
+
+                    {recent_transactions && recent_transactions.length > 0 ? (
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-right text-sm">
+                                <thead>
+                                    <tr className="border-b border-slate-700 text-slate-400 text-xs">
+                                        <th className="pb-3 font-semibold">المتجر</th>
+                                        <th className="pb-3 font-semibold">نوع العملية</th>
+                                        <th className="pb-3 font-semibold">المبلغ</th>
+                                        <th className="pb-3 font-semibold">وسيلة الدفع</th>
+                                        <th className="pb-3 font-semibold">رقم المعاملة المرجعي</th>
+                                        <th className="pb-3 font-semibold">الحالة</th>
+                                        <th className="pb-3 font-semibold">التاريخ والوقت</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-700/60">
+                                    {recent_transactions.map((trx) => (
+                                        <tr key={trx.id} className="hover:bg-slate-750/50 transition">
+                                            <td className="py-3.5">
+                                                <div className="font-semibold text-white">{trx.tenant_name}</div>
+                                                {trx.tenant_slug && (
+                                                    <div className="text-xs text-indigo-400 font-mono" dir="ltr">
+                                                        {trx.tenant_slug}.cashier-cash.com
+                                                    </div>
+                                                )}
+                                            </td>
+                                            <td className="py-3.5">
+                                                <span className="text-xs text-slate-200 font-medium">
+                                                    {trx.type_label}
+                                                </span>
+                                            </td>
+                                            <td className="py-3.5">
+                                                <span className="font-mono font-bold text-emerald-400 text-base">
+                                                    {formatNumber(trx.amount)}
+                                                </span>
+                                                <span className="text-xs text-slate-400 mr-1">{trx.currency}</span>
+                                            </td>
+                                            <td className="py-3.5">
+                                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 text-xs font-semibold">
+                                                    <CreditCard size={12} />
+                                                    <span>{trx.gateway === 'kashier' ? 'كاشير (Kashier)' : trx.gateway}</span>
+                                                </span>
+                                            </td>
+                                            <td className="py-3.5">
+                                                <span className="font-mono text-xs text-slate-400 bg-slate-900/80 px-2 py-1 rounded border border-slate-750">
+                                                    {trx.order_reference}
+                                                </span>
+                                            </td>
+                                            <td className="py-3.5">
+                                                {trx.status === 'paid' ? (
+                                                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                                                        <CheckCircle size={12} />
+                                                        <span>ناجحة ومفعلة</span>
+                                                    </span>
+                                                ) : trx.status === 'pending' ? (
+                                                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                                                        <Clock size={12} />
+                                                        <span>قيد السداد</span>
+                                                    </span>
+                                                ) : (
+                                                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-rose-500/15 text-rose-400 border border-rose-500/30">
+                                                        <AlertCircle size={12} />
+                                                        <span>ملغاة / غير مكتملة</span>
+                                                    </span>
+                                                )}
+                                            </td>
+                                            <td className="py-3.5 text-xs text-slate-400 font-mono">
+                                                {trx.created_at}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    ) : (
+                        <div className="py-12 text-center text-slate-400 space-y-2">
+                            <div className="w-12 h-12 rounded-2xl bg-slate-700/40 text-slate-500 flex items-center justify-center mx-auto">
+                                <DollarSign size={24} />
+                            </div>
+                            <div className="text-sm font-semibold text-slate-300">لا توجد عمليات سداد أو شحن مسجلة بعد</div>
+                            <p className="text-xs text-slate-500">
+                                بمجرد أن يقوم أي تاجر بشحن حسابه أو سداد اشتراكه عبر كاشير ستظهر بياناته هنا فوراً.
+                            </p>
+                        </div>
+                    )}
                 </div>
             </div>
         </SuperAdminLayout>

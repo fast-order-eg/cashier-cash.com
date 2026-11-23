@@ -131,6 +131,9 @@ Route::domain('app.' . $baseDomain)->group(function () {
         // إعدادات بوابات الدفع الإلكتروني (Paymob & Kashier)
         Route::get('/payment-settings', [\App\Http\Controllers\SuperAdmin\PaymentSettingController::class, 'index'])->name('superadmin.payment-settings.index');
         Route::post('/payment-settings', [\App\Http\Controllers\SuperAdmin\PaymentSettingController::class, 'update'])->name('superadmin.payment-settings.update');
+
+        // سجل العمليات والمدفوعات الإلكترونية (كاشير / الاشتراكات)
+        Route::get('/transactions', [\App\Http\Controllers\SuperAdmin\TransactionController::class, 'index'])->name('superadmin.transactions.index');
     });
 
     // إعادة توجيه الصفحة الرئيسية لـ app إلى لوحة السوبر أدمن أو تسجيل الدخول
