@@ -15,8 +15,18 @@ import {
 } from 'lucide-react';
 import { formatNumber, formatCurrency } from '@/utils/formatters';
 
-export default function Checkout({ transaction, tenant, gateway, isPaymobConfigured, paymobMode }) {
-    const [selectedMethod, setSelectedMethod] = useState('vodafone_cash'); // 'vodafone_cash' | 'instapay'
+export default function Checkout({ 
+    transaction, 
+    tenant, 
+    gateway, 
+    isPaymobConfigured, 
+    paymobMode,
+    isKashierConfigured,
+    kashierCheckoutUrl,
+    kashierMode
+}) {
+    const isKashierActive = gateway === 'kashier' || isKashierConfigured;
+    const [selectedMethod, setSelectedMethod] = useState(isKashierActive ? 'kashier' : 'vodafone_cash');
     const [walletPhone, setWalletPhone] = useState(tenant?.phone || '');
 
     const { post, processing, errors } = useForm({
@@ -31,6 +41,14 @@ export default function Checkout({ transaction, tenant, gateway, isPaymobConfigu
                 wallet_number: walletPhone,
             },
         });
+    };
+
+    const handlePayWithKashier = () => {
+        if (kashierCheckoutUrl) {
+            window.location.href = kashierCheckoutUrl;
+        } else {
+            handlePay('kashier');
+        }
     };
 
     const handleSimulateSuccess = () => {
@@ -48,9 +66,11 @@ export default function Checkout({ transaction, tenant, gateway, isPaymobConfigu
         return 'إتمام سداد اشتراك المتجر';
     };
 
+    const isAnyGatewayConfigured = isKashierConfigured || isPaymobConfigured;
+
     return (
         <div dir="rtl" className="min-h-screen bg-slate-950 text-slate-100 font-sans py-12 px-4 selection:bg-indigo-500 selection:text-white">
-            <Head title="إتمام الدفع - Paymob" />
+            <Head title="إتمام الدفع - Kashier / Paymob" />
 
             <div className="max-w-xl mx-auto space-y-6">
                 {/* Back to subscriptions link */}
@@ -74,7 +94,7 @@ export default function Checkout({ transaction, tenant, gateway, isPaymobConfigu
                     </div>
                     <h1 className="text-2xl font-black text-white">إتمام السداد وتفعيل الطلب</h1>
                     <p className="text-slate-400 text-xs">
-                        الدفع الإلكتروني الآمن بواسطة بوابة <b>Paymob (باي موب)</b> المعتمدة في مصر
+                        الدفع الإلكتروني الآمن بواسطة بوابة <b>كاشير (Kashier)</b> المعتمدة لدى البنك المركزي المصري
                     </p>
                 </div>
 
@@ -130,10 +150,10 @@ export default function Checkout({ transaction, tenant, gateway, isPaymobConfigu
                             <Lock size={16} className="text-indigo-400" />
                             <span>اختر وسيلة الدفع:</span>
                         </h2>
-                        {isPaymobConfigured ? (
+                        {isKashierConfigured || isPaymobConfigured ? (
                             <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-1 font-bold">
                                 <CheckCircle2 size={12} />
-                                <span>البوابة مفعلة ومربوطة</span>
+                                <span>الدفع الإلكتروني مفعل</span>
                             </span>
                         ) : (
                             <span className="text-[11px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30 flex items-center gap-1 font-bold">
@@ -143,20 +163,68 @@ export default function Checkout({ transaction, tenant, gateway, isPaymobConfigu
                         )}
                     </div>
 
-                    {!isPaymobConfigured && (
+                    {!isAnyGatewayConfigured && (
                         <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-xs space-y-1.5">
                             <div className="flex items-center gap-2 text-amber-400 font-bold">
                                 <AlertCircle size={16} className="shrink-0" />
-                                <span>بوابة الدفع الإلكتروني (Paymob) قيد التهيئة</span>
+                                <span>بوابات الدفع الإلكتروني قيد التهيئة</span>
                             </div>
                             <p className="text-slate-300 leading-relaxed text-[11px]">
-                                لم يتم إدخال مفاتيح الربط الخاصة ببوابة Paymob بعد في لوحة تحكم السوبر أدمن (<span className="text-white font-mono">/admin/payment-settings</span>). 
-                                لا يمكن السداد أو التجديد التلقائي حتى يتم إدخال المفاتيح.
+                                لم يتم إدخال مفاتيح الربط بعد في لوحة تحكم السوبر أدمن (<span className="text-white font-mono">/admin/payment-settings</span>). 
                             </p>
                         </div>
                     )}
 
                     <div className="space-y-3">
+                        {/* Option 0: Kashier (Recommended) */}
+                        <div 
+                            onClick={() => setSelectedMethod('kashier')}
+                            className={`p-4 rounded-2xl border transition cursor-pointer ${
+                                selectedMethod === 'kashier'
+                                    ? 'bg-indigo-500/10 border-indigo-500/50 shadow-lg shadow-indigo-500/10'
+                                    : 'bg-slate-950 border-slate-800 hover:border-slate-700'
+                            }`}
+                        >
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 rounded-xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center font-bold">
+                                        <CreditCard size={20} />
+                                    </div>
+                                    <div>
+                                        <div className="font-bold text-sm text-white flex items-center gap-2">
+                                            <span>كاشير (Kashier) - فيزا ومحافظ ذكية</span>
+                                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 font-bold">موصى به ⚡</span>
+                                        </div>
+                                        <span className="text-[11px] text-slate-400 block mt-0.5">
+                                            فيزا، ماستركارد، كروت ميزة، فودافون كاش، وكافة المحافظ الإلكترونية
+                                        </span>
+                                    </div>
+                                </div>
+                                <div className={`w-5 h-5 rounded-full border flex items-center justify-center ${
+                                    selectedMethod === 'kashier' ? 'border-indigo-500 bg-indigo-500' : 'border-slate-750 bg-slate-900'
+                                }`}>
+                                    {selectedMethod === 'kashier' && <div className="w-2 h-2 rounded-full bg-white" />}
+                                </div>
+                            </div>
+
+                            {selectedMethod === 'kashier' && (
+                                <div className="mt-4 pt-3 border-t border-slate-800 space-y-2 animate-in fade-in">
+                                    <span className="text-[11px] text-slate-300 block">
+                                        سيتم تحويلك إلى صفحة الدفع الرسمية لشركة كاشير (Kashier) لإتمام السداد فوراً بأعلى معايير الأمان وتفعيل اشتراكك لحظياً.
+                                    </span>
+                                    <button
+                                        type="button"
+                                        onClick={handlePayWithKashier}
+                                        disabled={processing}
+                                        className="w-full mt-2 py-3 rounded-xl font-bold text-xs bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-600/30 cursor-pointer transition flex items-center justify-center gap-2"
+                                    >
+                                        <Sparkles size={16} />
+                                        <span>متابعة الدفع ({formatNumber(transaction.amount)} ج.م) عبر كاشير</span>
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+
                         {/* Option 1: Vodafone Cash & Wallets */}
                         <div 
                             onClick={() => setSelectedMethod('vodafone_cash')}

@@ -239,8 +239,17 @@ class SubscriptionController extends Controller
             return redirect()->route('admin.subscriptions.index')->with('success', 'تم سداد هذه المعاملة وتفعيلها بالفعل!');
         }
 
-        $activeGateway = PlatformSetting::get('active_gateway', 'paymob');
+        $activeGateway = PlatformSetting::get('active_gateway', 'kashier');
         $isPaymobConfigured = $paymobService->isConfigured();
+        $isKashierConfigured = $kashierService->isConfigured();
+
+        $kashierCallbackUrl = route('admin.subscriptions.payment.callback');
+        $kashierCheckoutUrl = $kashierService->getCheckoutUrl(
+            $transaction->order_reference,
+            $transaction->amount,
+            $kashierCallbackUrl,
+            $transaction->currency
+        );
 
         return Inertia::render('Merchant/Subscriptions/Checkout', [
             'transaction' => [
@@ -259,13 +268,21 @@ class SubscriptionController extends Controller
             'gateway' => $activeGateway,
             'isPaymobConfigured' => $isPaymobConfigured,
             'paymobMode' => $paymobService->getMode(),
+            'isKashierConfigured' => $isKashierConfigured,
+            'kashierCheckoutUrl' => $kashierCheckoutUrl,
+            'kashierMode' => $kashierService->getMode(),
         ]);
     }
 
     /**
-     * معالجة الدفع المباشر (فودافون كاش أو إنستاباي أو محاكاة الاختبار)
+     * معالجة الدفع المباشر (كاشير، فودافون كاش، إنستاباي، أو محاكاة الاختبار)
      */
-    public function processPayment(Request $request, string $orderReference, PaymobService $paymobService): JsonResponse|RedirectResponse
+    public function processPayment(
+        Request $request, 
+        string $orderReference, 
+        PaymobService $paymobService, 
+        KashierService $kashierService
+    ): JsonResponse|RedirectResponse
     {
         $tenant = app(Tenant::class);
 
@@ -277,8 +294,8 @@ class SubscriptionController extends Controller
             return redirect()->route('admin.subscriptions.index')->with('success', 'المعاملة مدفوعة بالفعل ومفعلة!');
         }
 
-        $method = $request->input('method', 'vodafone_cash'); // vodafone_cash, instapay, simulate
-        $walletNumber = $request->input('wallet_number');
+        $activeGateway = PlatformSetting::get('active_gateway', 'kashier');
+        $method = $request->input('method', ($activeGateway === 'kashier' ? 'kashier' : 'vodafone_cash'));
 
         // 1. زر المحاكاة التجريبية الصريح (Localhost Sandbox) المخصص للمطور فقط أثناء بيئة التطوير
         if ($method === 'simulate') {
@@ -295,7 +312,28 @@ class SubscriptionController extends Controller
             return redirect()->route('admin.subscriptions.index')->with('success', $msg);
         }
 
-        // 2. التحقق الصارم من تهيئة بوابة Paymob (وجود المفاتيح في لوحة السوبر أدمن)
+        // 2. مسار الدفع الفوري والمباشر عبر كاشير (Kashier)
+        if ($method === 'kashier' || ($activeGateway === 'kashier' && !in_array($method, ['vodafone_cash', 'instapay']))) {
+            if (!$kashierService->isConfigured()) {
+                return back()->with('error', 'بوابة الدفع الإلكتروني (كاشير) قيد التهيئة حالياً من قبل إدارة المنصة. يرجى مراجعة إعدادات السوبر أدمن.');
+            }
+
+            $session = $kashierService->createPaymentSession(
+                $transaction->order_reference,
+                $transaction->amount,
+                route('admin.subscriptions.payment.callback'),
+                $tenant->email ?: 'owner@cashier-cash.com',
+                $transaction->currency
+            );
+
+            if ($session['success'] && !empty($session['redirect_url'])) {
+                return Inertia::location($session['redirect_url']);
+            }
+
+            return back()->with('error', $session['message'] ?? 'فشل الاتصال ببوابة كاشير، يرجى المحاولة لاحقاً.');
+        }
+
+        // 3. التحقق الصارم من تهيئة بوابة Paymob (وجود المفاتيح في لوحة السوبر أدمن)
         if (!$paymobService->isConfigured()) {
             return back()->with('error', 'بوابة الدفع الإلكتروني (Paymob) قيد التهيئة حالياً من قبل إدارة المنصة. لم يتم خصم أو تفعيل أي مبالغ. يرجى إدخال بيانات الربط في لوحة السوبر أدمن أولاً.');
         }
@@ -406,10 +444,29 @@ class SubscriptionController extends Controller
     }
 
     /**
-     * صفحة العودة والـ Callback من Paymob بعد الدفع
+     * صفحة العودة والـ Callback من Kashier أو Paymob بعد إتمام الدفع
      */
     public function paymentCallback(Request $request): RedirectResponse
     {
+        // 1. معالجة الرد الوارد من بوابة كاشير (Kashier)
+        if ($request->has('paymentStatus')) {
+            $paymentStatus = strtoupper($request->query('paymentStatus', ''));
+            $orderId = $request->query('orderId') ?? $request->query('merchantOrderId');
+
+            if ($orderId) {
+                $transaction = PaymentTransaction::where('order_reference', $orderId)->first();
+                if ($transaction) {
+                    if ($paymentStatus === 'SUCCESS') {
+                        $this->activateTransaction($transaction, 'kashier', $request->query('transactionId'));
+                        return redirect()->route('admin.subscriptions.index')->with('success', 'تم السداد بنجاح عبر كاشير وتفعيل طلبك فوراً!');
+                    } else {
+                        return redirect()->route('admin.subscriptions.index')->with('error', 'تم إلغاء عملية الدفع عبر كاشير أو لم تكتمل.');
+                    }
+                }
+            }
+        }
+
+        // 2. معالجة الرد الوارد من بوابة Paymob
         $success = $request->query('success');
         $orderReference = $request->query('merchant_order_id');
 
@@ -422,6 +479,31 @@ class SubscriptionController extends Controller
         }
 
         return redirect()->route('admin.subscriptions.index')->with('info', 'تم استلام تفاصيل العملية وجاري التحديث.');
+    }
+
+    /**
+     * Webhook رسمي من خوادم Kashier
+     */
+    public function kashierWebhook(Request $request, KashierService $kashierService): JsonResponse
+    {
+        $data = $request->all();
+        $signature = $request->header('x-kashier-signature') ?? $request->input('signature');
+
+        if (!empty($signature) && !$kashierService->validateWebhookSignature($data, $signature)) {
+            return response()->json(['message' => 'Invalid Kashier signature'], 400);
+        }
+
+        $orderId = $data['orderId'] ?? $data['merchantOrderId'] ?? null;
+        $status = strtoupper($data['paymentStatus'] ?? $data['status'] ?? '');
+
+        if ($orderId && $status === 'SUCCESS') {
+            $transaction = PaymentTransaction::where('order_reference', $orderId)->first();
+            if ($transaction && $transaction->status !== 'paid') {
+                $this->activateTransaction($transaction, 'kashier', $data['transactionId'] ?? null);
+            }
+        }
+
+        return response()->json(['status' => 'received']);
     }
 
     /**
@@ -453,7 +535,7 @@ class SubscriptionController extends Controller
     /**
      * تفعيل المعاملة وتحديث بيانات المتجر والاشتراك
      */
-    protected function activateTransaction(PaymentTransaction $transaction, string $method, ?string $reference = null): void
+    public function activateTransaction(PaymentTransaction $transaction, string $method, ?string $reference = null): void
     {
         $tenant = $transaction->tenant;
         $sub = $transaction->subscription ?: $tenant->currentSubscription;

@@ -43,4 +43,11 @@ return [
             'verify' => env('GOOGLE_SSL_VERIFY', false),
         ],
     ],
+
+    'kashier' => [
+        'merchant_id' => env('KASHIER_MERCHANT_ID', 'MID-52019-895'),
+        'api_key' => env('KASHIER_API_KEY', '0b01aadf-0df2-4d90-864c-913dc3462b1c'),
+        'secret_key' => env('KASHIER_SECRET_KEY', '20b46d7dd22d75e195c8d0f0f6ed6e41$b47fdd473e076b8e035662ea2fd217bf96c7196524de12cf5c1dbfebd85ef6276888f3a833443645a0a29441f243590e'),
+        'mode' => env('KASHIER_MODE', 'live'),
+    ],
 ];

@@ -247,6 +247,16 @@ class RegistrationController extends Controller
                     'payload' => $payload,
                 ]);
             }
+
+            // تفعيل معاملات المتاجر المشتركة (تجديد، إضافة موظفين، ترقية)
+            $payTx = \App\Models\PaymentTransaction::where('order_reference', $orderId)->first();
+            if ($payTx && $payTx->status !== 'paid') {
+                app(\App\Http\Controllers\Merchant\SubscriptionController::class)->activateTransaction(
+                    $payTx,
+                    'kashier',
+                    $data['kashierTransactionId'] ?? ($data['transactionId'] ?? null)
+                );
+            }
         }
 
         return response()->json(['status' => 'processed']);
