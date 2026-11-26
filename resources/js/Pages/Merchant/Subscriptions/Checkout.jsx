@@ -1,8 +1,7 @@
 import React from 'react';
-import { Head, useForm, Link } from '@inertiajs/react';
+import { Head, useForm, Link, usePage } from '@inertiajs/react';
 import { 
     CreditCard, 
-    Smartphone, 
     ShieldCheck, 
     ArrowRight, 
     CheckCircle2, 
@@ -11,27 +10,23 @@ import {
     Zap,
     Lock,
     Sparkles,
-    Check
+    Check,
+    AlertTriangle,
+    Loader2
 } from 'lucide-react';
 import { formatNumber } from '@/utils/formatters';
 
 export default function Checkout({ 
     transaction, 
-    tenant, 
-    kashierCheckoutUrl
+    tenant
 }) {
-    const { post, processing } = useForm();
+    const { flash } = usePage().props;
+    const { post, processing } = useForm({
+        method: 'kashier',
+    });
 
     const handlePay = () => {
-        if (kashierCheckoutUrl) {
-            window.location.href = kashierCheckoutUrl;
-        } else {
-            post(`/admin/subscriptions/pay/${transaction.order_reference}`, {
-                data: {
-                    method: 'kashier',
-                },
-            });
-        }
+        post(`/admin/subscriptions/pay/${transaction.order_reference}`);
     };
 
     const getTitle = () => {
@@ -59,6 +54,14 @@ export default function Checkout({
                         طلب رقم #{transaction.order_reference}
                     </span>
                 </div>
+
+                {/* Flash Error Alert */}
+                {flash?.error && (
+                    <div className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-3">
+                        <AlertTriangle size={18} className="text-rose-400 shrink-0" />
+                        <span>{flash.error}</span>
+                    </div>
+                )}
 
                 {/* Header */}
                 <div className="text-center space-y-2">
@@ -175,10 +178,19 @@ export default function Checkout({
                                 type="button"
                                 onClick={handlePay}
                                 disabled={processing}
-                                className="w-full py-3.5 rounded-2xl font-black text-sm bg-indigo-600 hover:bg-indigo-500 text-white shadow-xl shadow-indigo-600/30 cursor-pointer transition flex items-center justify-center gap-2 hover:scale-[1.01] active:scale-[0.99] disabled:opacity-50"
+                                className="w-full py-3.5 rounded-2xl font-black text-sm bg-indigo-600 hover:bg-indigo-500 text-white shadow-xl shadow-indigo-600/30 cursor-pointer transition flex items-center justify-center gap-2 hover:scale-[1.01] active:scale-[0.99] disabled:opacity-60 disabled:cursor-wait"
                             >
-                                <Sparkles size={18} />
-                                <span>متابعة السداد والتفعيل الآن ({formatNumber(transaction.amount)} ج.م)</span>
+                                {processing ? (
+                                    <>
+                                        <Loader2 size={18} className="animate-spin" />
+                                        <span>جاري تجهيز صفحة الدفع الآمنة...</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <Sparkles size={18} />
+                                        <span>متابعة السداد والتفعيل الآن ({formatNumber(transaction.amount)} ج.م)</span>
+                                    </>
+                                )}
                             </button>
                         </div>
                     </div>

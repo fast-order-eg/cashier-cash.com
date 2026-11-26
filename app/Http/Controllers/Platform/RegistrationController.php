@@ -154,15 +154,18 @@ class RegistrationController extends Controller
 
     public function kashierCallback(Request $request)
     {
-        $orderId = $request->input('orderId', $request->query('orderId', $request->input('merchantOrderId', $request->query('merchantOrderId'))));
-        $paymentStatus = strtoupper((string) ($request->input('paymentStatus', $request->query('paymentStatus', ''))));
-        $transactionId = $request->input('transactionId', $request->query('transactionId'));
-        $signature = $request->input('signature', $request->query('signature'));
+        $merchantOrderId = $request->input('merchantOrderId') ?? $request->query('merchantOrderId');
+        $kashierOrderId = $request->input('orderId') ?? $request->query('orderId');
+        $orderCandidates = array_values(array_unique(array_filter([$merchantOrderId, $kashierOrderId])));
+        $paymentStatus = strtoupper((string) ($request->input('paymentStatus') ?? $request->query('paymentStatus') ?? $request->input('status') ?? $request->query('status') ?? ''));
+        $transactionId = $request->input('transactionId') ?? $request->query('transactionId');
 
         $isSuccess = in_array($paymentStatus, ['SUCCESS', 'CAPTURED', 'PAID']);
 
         // 1. فحص معاملات المتاجر المشتركة (تجديد، إضافة موظفين، ترقية)
-        $payTx = \App\Models\PaymentTransaction::where('order_reference', $orderId)->first();
+        $payTx = !empty($orderCandidates)
+            ? \App\Models\PaymentTransaction::whereIn('order_reference', $orderCandidates)->first()
+            : null;
         if ($payTx) {
             if ($isSuccess) {
                 if ($payTx->status !== 'paid') {
@@ -184,7 +187,9 @@ class RegistrationController extends Controller
         }
 
         // 2. فحص معاملات تسجيل المتجر الجديد
-        $transaction = KashierTransaction::where('kashier_order_id', $orderId)->first();
+        $transaction = !empty($orderCandidates)
+            ? KashierTransaction::whereIn('kashier_order_id', $orderCandidates)->first()
+            : null;
         if ($transaction) {
             $subscription = $transaction->subscription;
             $tenant = $transaction->tenant;
@@ -239,26 +244,30 @@ class RegistrationController extends Controller
     public function kashierWebhook(Request $request): JsonResponse
     {
         $payload = $request->all();
-        $data = $payload['data'] ?? $payload;
-        $signature = $request->header('x-kashier-signature') ?? $payload['signature'] ?? null;
+        \Illuminate\Support\Facades\Log::info('Kashier Webhook received:', $payload);
 
-        if (!empty($signature) && !$this->kashierService->validateWebhookSignature($data, $signature)) {
+        $data = isset($payload['data']) && is_array($payload['data']) ? $payload['data'] : $payload;
+        $signature = $request->header('x-kashier-signature') ?? $data['signature'] ?? $payload['signature'] ?? null;
+
+        if (!empty($signature) && !$this->kashierService->validateWebhookSignature($data, (string) $signature, $request->getContent())) {
+            \Illuminate\Support\Facades\Log::warning('Kashier Webhook: Invalid signature', ['signature' => $signature]);
             return response()->json(['error' => 'Invalid signature'], 400);
         }
 
-        $orderId = $data['merchantOrderId'] 
-            ?? $data['orderId'] 
-            ?? $payload['merchantOrderId'] 
-            ?? $payload['orderId'] 
-            ?? null;
-            
-        $status = strtoupper((string) ($data['status'] ?? $data['paymentStatus'] ?? $payload['status'] ?? $payload['paymentStatus'] ?? ''));
+        $orderCandidates = array_values(array_unique(array_filter([
+            $data['merchantOrderId'] ?? null,
+            $payload['merchantOrderId'] ?? null,
+            $data['orderId'] ?? null,
+            $payload['orderId'] ?? null,
+        ])));
+
+        $status = strtoupper((string) ($data['paymentStatus'] ?? $data['status'] ?? $payload['paymentStatus'] ?? $payload['status'] ?? ''));
         $isSuccess = in_array($status, ['SUCCESS', 'CAPTURED', 'PAID']);
         $txId = $data['kashierTransactionId'] ?? $data['transactionId'] ?? $payload['transactionId'] ?? null;
 
-        if ($orderId && $isSuccess) {
+        if (!empty($orderCandidates) && $isSuccess) {
             // أولاً: تفعيل معاملات المتاجر المشتركة (تجديد، إضافة موظفين، ترقية)
-            $payTx = \App\Models\PaymentTransaction::where('order_reference', $orderId)->first();
+            $payTx = \App\Models\PaymentTransaction::whereIn('order_reference', $orderCandidates)->first();
             if ($payTx && $payTx->status !== 'paid') {
                 app(\App\Http\Controllers\Merchant\SubscriptionController::class)->activateTransaction(
                     $payTx,
@@ -268,7 +277,7 @@ class RegistrationController extends Controller
             }
 
             // ثانياً: تفعيل اشتراك متجر مسجل جديد
-            $transaction = KashierTransaction::where('kashier_order_id', $orderId)->first();
+            $transaction = KashierTransaction::whereIn('kashier_order_id', $orderCandidates)->first();
             if ($transaction && $transaction->status !== 'SUCCESS') {
                 $subscription = $transaction->subscription;
                 $tenant = $transaction->tenant;
